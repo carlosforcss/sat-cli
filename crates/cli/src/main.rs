@@ -41,10 +41,11 @@ impl Command {
         match &self {
             Command::Help => println!("Executing help command"),
             Command::ValidateCredentials { username, password } => {
-                Crawler::ValidateCredentials {
+                let response = Crawler::ValidateCredentials {
                     username: username.clone(),
                     password: password.clone(),
-                }.run().await.expect("ERr running crawler");
+                }.run().await.expect("Err running crawler");
+                dbg!(response);
             }
         }
     }
