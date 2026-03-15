@@ -1,8 +1,8 @@
 [package]
-name = "cli"
+name = "sat-cli"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
-crawler = { path = "../crawler"}
+satcrawler = { path = "../sat-crawler"}

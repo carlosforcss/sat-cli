@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "crates/cli",
-    "crates/crawler"
+    "crates/sat-cli",
+    "crates/sat-crawler"
 ]
 resolver = "2"

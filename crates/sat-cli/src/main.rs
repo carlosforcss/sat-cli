@@ -1,5 +1,6 @@
 use std::env;
-use crawler::Crawler;
+use satcrawler::Crawler;
+
 
 #[derive(Debug)]
 enum Command {
