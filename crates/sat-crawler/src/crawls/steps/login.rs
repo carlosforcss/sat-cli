@@ -1,12 +1,14 @@
 use crate::utils::{create_tmp_file, do_sleep, solve_captcha};
 use chromiumoxide::{Browser, Page};
 
+pub const LOGIN_URL: &str = "https://login.siat.sat.gob.mx/";
+
 pub async fn login(
     browser: &Browser,
     username: String,
     password: String,
 ) -> Result<Page, Box<dyn std::error::Error>> {
-    let page = browser.new_page("https://login.siat.sat.gob.mx/").await?;
+    let page = browser.new_page(LOGIN_URL).await?;
     page.wait_for_navigation().await?;
     do_sleep(1).await;
 
