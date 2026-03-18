@@ -15,6 +15,7 @@ pub async fn run_validate_credentials_crawler(
     let (browser, mut handler) = Browser::launch(
         BrowserConfig::builder()
             .user_data_dir(dir.path())
+            .no_sandbox()
             .with_head()
             .build()?,
     )
