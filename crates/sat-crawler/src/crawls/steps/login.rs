@@ -1,4 +1,4 @@
-use crate::utils::{create_tmp_file, do_sleep, solve_captcha};
+use crate::utils::{create_tmp_file, solve_captcha};
 use chromiumoxide::{Browser, Page};
 
 pub const LOGIN_URL: &str = "https://portalcfdi.facturaelectronica.sat.gob.mx/";

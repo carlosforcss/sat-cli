@@ -1,25 +1,28 @@
 use crate::crawls::steps::login::login;
 use crate::utils::do_sleep;
-use crate::CrawlerResponse;
+use crate::{CrawlerConfig, CrawlerResponse};
 use chromiumoxide::{Browser, BrowserConfig};
 use futures::StreamExt;
 use tempfile::tempdir;
 
-pub async fn run_validate_credentials_crawler(
-    username: String,
-    password: String,
-) -> Result<CrawlerResponse, Box<dyn std::error::Error>> {
+pub async fn run_validate_credentials_crawler(config: &CrawlerConfig) -> Result<CrawlerResponse, Box<dyn std::error::Error>> {
     println!("Validating credentials...");
     let dir = tempdir()?;
 
-    let (browser, mut handler) = Browser::launch(
-        BrowserConfig::builder()
-            .user_data_dir(dir.path())
-            .no_sandbox()
-            .with_head()
-            .build()?,
-    )
-    .await?;
+    let mut browser_config_builder = BrowserConfig::builder()
+        .user_data_dir(dir.path());
+
+    if config.options.headless.unwrap_or(true) {
+        browser_config_builder = browser_config_builder.with_head().clone();
+    }
+
+    if config.options.sandbox.unwrap_or(false) == false {
+        browser_config_builder = browser_config_builder.no_sandbox().clone();
+    }
+
+    let browser_config = browser_config_builder.build()?;
+
+    let (browser, mut handler) = Browser::launch(browser_config).await?;
 
     let _ = tokio::spawn(async move {
         loop {
@@ -27,7 +30,11 @@ pub async fn run_validate_credentials_crawler(
         }
     });
 
-    let page = login(&browser, username, password).await?;
+    let page = login(
+        &browser, 
+        config.credentials.username.clone(), 
+        config.credentials.password.clone()
+    ).await?;
     do_sleep(2).await;
     page.wait_for_navigation().await?;
 

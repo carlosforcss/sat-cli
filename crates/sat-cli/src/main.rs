@@ -1,4 +1,4 @@
-use satcrawler::Crawler;
+use satcrawler::{Crawler, CrawlerConfig, CrawlerOptions, Credentials};
 use std::env;
 
 #[derive(Debug)]
@@ -40,26 +40,31 @@ impl Command {
     }
 
     async fn run(&self) {
+        let options = CrawlerOptions::default();
         match &self {
             Command::Help => println!("Executing help command"),
             Command::ValidateCredentials { username, password } => {
-                let response = Crawler::ValidateCredentials {
-                    username: username.clone(),
-                    password: password.clone(),
-                }
-                .run()
-                .await
+                let config = CrawlerConfig::new(
+                    Credentials {
+                        username: username.clone(),
+                        password: password.clone(),
+                    },
+                    options
+                );
+                let response = Crawler::ValidateCredentials(config).run().await
                 .expect("Err running crawler");
                 dbg!(response);
             }
             Command::DownloadInvoices { username, password } => {
-                let response = Crawler::DownloadInvoices {
-                    username: username.clone(),
-                    password: password.clone(),
-                }
-                .run()
-                .await
-                .expect("Err running crawler");
+                 let config = CrawlerConfig::new(
+                    Credentials {
+                        username: username.clone(),
+                        password: password.clone(),
+                    },
+                    options
+                );
+                let response = Crawler::DownloadInvoices(config).run().await
+                    .expect("Err running crawler");
                 dbg!(response);
             }
         }
