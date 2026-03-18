@@ -1,7 +1,7 @@
 use crate::utils::{create_tmp_file, do_sleep, solve_captcha};
 use chromiumoxide::{Browser, Page};
 
-pub const LOGIN_URL: &str = "https://login.siat.sat.gob.mx/";
+pub const LOGIN_URL: &str = "https://portalcfdi.facturaelectronica.sat.gob.mx/";
 
 pub async fn login(
     browser: &Browser,
@@ -10,7 +10,6 @@ pub async fn login(
 ) -> Result<Page, Box<dyn std::error::Error>> {
     let page = browser.new_page(LOGIN_URL).await?;
     page.wait_for_navigation().await?;
-    do_sleep(1).await;
 
     // Set username
     dbg!("Getting element input#rfc");
@@ -46,6 +45,7 @@ pub async fn login(
     let submit_button = page.find_element("input#submit").await?;
     submit_button.focus().await?;
     submit_button.click().await?;
+    page.wait_for_navigation().await?;
 
     Ok(page)
 }

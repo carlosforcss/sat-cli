@@ -9,6 +9,7 @@ pub struct CrawlerResponse {
 
 pub enum Crawler {
     ValidateCredentials { username: String, password: String },
+    DownloadInvoices { username: String, password: String },
 }
 
 impl Crawler {
@@ -17,6 +18,12 @@ impl Crawler {
             Crawler::ValidateCredentials { username, password } => {
                 let response =
                     crawls::run_validate_credentials_crawler(username.clone(), password.clone())
+                        .await?;
+                Ok(response)
+            }
+            Crawler::DownloadInvoices { username, password } => {
+                let response =
+                    crawls::run_download_invoices_crawler(username.clone(), password.clone())
                         .await?;
                 Ok(response)
             }

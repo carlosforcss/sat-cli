@@ -5,6 +5,7 @@ use std::env;
 enum Command {
     Help,
     ValidateCredentials { username: String, password: String },
+    DownloadInvoices { username: String, password: String },
 }
 
 impl Command {
@@ -23,6 +24,14 @@ impl Command {
                     password: password,
                 }
             }
+            "download_invoices" => {
+                let username = args.next().expect("No username provided");
+                let password = args.next().expect("No password provided");
+                Command::DownloadInvoices {
+                    username: username,
+                    password: password,
+                }
+            }
             "help" => Command::Help,
             _ => Command::Help,
         };
@@ -35,6 +44,16 @@ impl Command {
             Command::Help => println!("Executing help command"),
             Command::ValidateCredentials { username, password } => {
                 let response = Crawler::ValidateCredentials {
+                    username: username.clone(),
+                    password: password.clone(),
+                }
+                .run()
+                .await
+                .expect("Err running crawler");
+                dbg!(response);
+            }
+            Command::DownloadInvoices { username, password } => {
+                let response = Crawler::DownloadInvoices {
                     username: username.clone(),
                     password: password.clone(),
                 }
