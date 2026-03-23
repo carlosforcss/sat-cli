@@ -1,5 +1,6 @@
-use satcrawler::{Crawler, CrawlerConfig, CrawlerOptions, Credentials};
+use satcrawler::{Crawler, CrawlerConfig, CrawlerOptions, CrawlerType, Credentials};
 use std::env;
+use tracing::info;
 
 #[derive(Debug)]
 enum Command {
@@ -49,23 +50,29 @@ impl Command {
                         username: username.clone(),
                         password: password.clone(),
                     },
-                    options
+                    options,
                 );
-                let response = Crawler::ValidateCredentials(config).run().await
-                .expect("Err running crawler");
-                dbg!(response);
+                let crawler = Crawler::new(CrawlerType::ValidateCredentials, config);
+                let response = crawler.run().await;
+                println!(
+                    "{}",
+                    serde_json::to_string(&response).expect("Response serialization error")
+                );
             }
             Command::DownloadInvoices { username, password } => {
-                 let config = CrawlerConfig::new(
+                let config = CrawlerConfig::new(
                     Credentials {
                         username: username.clone(),
                         password: password.clone(),
                     },
-                    options
+                    options,
                 );
-                let response = Crawler::DownloadInvoices(config).run().await
-                    .expect("Err running crawler");
-                dbg!(response);
+                let crawler = Crawler::new(CrawlerType::DownloadInvoices, config);
+                let response = crawler.run().await;
+                println!(
+                    "{}",
+                    serde_json::to_string(&response).expect("Response serialization error")
+                );
             }
         }
     }
@@ -73,8 +80,7 @@ impl Command {
 
 #[tokio::main]
 async fn main() {
-    println!("Hello world! :)");
     let command = Command::get().expect("Error getting command");
-    dbg!("Running {} comand", &command);
+    info!("Runnign command {:?}", &command);
     command.run().await;
 }

@@ -1,5 +1,6 @@
 use crate::utils::{create_tmp_file, solve_captcha};
 use chromiumoxide::{Browser, Page};
+use tracing::info;
 
 pub const LOGIN_URL: &str = "https://portalcfdi.facturaelectronica.sat.gob.mx/";
 
@@ -12,19 +13,19 @@ pub async fn login(
     page.wait_for_navigation().await?;
 
     // Set username
-    dbg!("Getting element input#rfc");
+    info!("Getting element input#rfc");
     let rfc_input = page.find_element("#rfc").await?;
     rfc_input.focus().await?;
     rfc_input.type_str(username.clone()).await?;
 
     // Set password
-    dbg!("Getting elememnt input#password");
+    info!("Getting elememnt input#password");
     let password_input = page.find_element("input#password").await?;
     password_input.focus().await?;
     password_input.type_str(password.clone()).await?;
 
     // Getting catpcha image to solve
-    dbg!("Getting element #divCaptcha img");
+    info!("Getting element #divCaptcha img");
     let img_captcha = page.find_element("#divCaptcha img").await?;
     let img_src_content = img_captcha.attribute("src").await?.unwrap();
 
@@ -34,14 +35,14 @@ pub async fn login(
     let img_tmp_path = img_tmp_file.path().to_str().unwrap();
     let captcha_code = solve_captcha(img_tmp_path).await?;
 
-    dbg!("Fullfilling captcha input in page");
+    info!("Fullfilling captcha input in page");
     // Fullfilling captcha input
     let captcha_input = page.find_element("input#userCaptcha").await?;
     captcha_input.focus().await?;
     captcha_input.type_str(&captcha_code).await?;
 
     // Pressing submit button
-    dbg!("Submitting survey");
+    info!("Submitting survey");
     let submit_button = page.find_element("input#submit").await?;
     submit_button.focus().await?;
     submit_button.click().await?;

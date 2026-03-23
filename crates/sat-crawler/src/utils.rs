@@ -2,6 +2,7 @@ use base64::{engine::general_purpose, Engine as _};
 use std::{env, fs};
 use tempfile;
 use tokio::time::{sleep, Duration};
+use tracing::info;
 use twocaptcha::{TwoCaptcha, TwoCaptchaConfig};
 
 pub async fn do_sleep(duration: u64) {
@@ -13,7 +14,7 @@ pub async fn create_tmp_file(
 ) -> Result<tempfile::NamedTempFile, Box<dyn std::error::Error>> {
     let file_content = general_purpose::STANDARD.decode(image_base64)?;
     let tmp_file = tempfile::Builder::new().suffix(".jpg").tempfile()?;
-    dbg!("Tep file: ", &tmp_file);
+    info!("Tep file: {:?}", &tmp_file);
     fs::write(&tmp_file, file_content)?;
     Ok(tmp_file)
 }

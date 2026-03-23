@@ -1,13 +1,12 @@
 use crate::crawls::steps::login::login;
 use crate::utils::do_sleep;
-use crate::CrawlerResponse;
+use crate::{Crawler, CrawlerResponse};
 use chromiumoxide::{Browser, BrowserConfig};
 use futures::StreamExt;
 use std::error::Error;
 
 pub async fn run_download_invoices_crawler(
-    username: String,
-    password: String,
+    crawler: &Crawler,
 ) -> Result<CrawlerResponse, Box<dyn Error>> {
     let (browser, mut handler) =
         Browser::launch(BrowserConfig::builder().with_head().build()?).await?;
@@ -18,7 +17,12 @@ pub async fn run_download_invoices_crawler(
         }
     });
 
-    let page = login(&browser, username, password).await?;
+    let _page = login(
+        &browser,
+        crawler.config.credentials.username.clone(),
+        crawler.config.credentials.password.clone(),
+    )
+    .await?;
     do_sleep(10).await;
     Ok(CrawlerResponse {
         success: true,

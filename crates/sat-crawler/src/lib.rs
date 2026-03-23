@@ -1,12 +1,15 @@
 mod crawls;
+mod logger;
 mod utils;
 
-#[derive(Debug, Clone)]
+use serde::{Deserialize, Serialize};
+use tracing::info;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrawlerResponse {
     pub success: bool,
     pub message: String,
 }
-
 
 pub struct Credentials {
     pub username: String,
@@ -33,24 +36,45 @@ impl CrawlerConfig {
     }
 }
 
-pub enum Crawler {
-    ValidateCredentials(CrawlerConfig),
-    DownloadInvoices(CrawlerConfig),
+pub enum CrawlerType {
+    DownloadInvoices,
+    ValidateCredentials,
+}
+
+pub struct Crawler {
+    pub crawler_type: CrawlerType,
+    pub config: CrawlerConfig,
+    logger: logger::Logger,
 }
 
 impl Crawler {
-    pub async fn run(&self) -> Result<CrawlerResponse, Box<dyn std::error::Error>> {
-        match &self {
-            Crawler::ValidateCredentials(config) => {
-                let response = crawls::run_validate_credentials_crawler(config).await?;
-                Ok(response)
+    pub fn new(crawler_type: CrawlerType, config: CrawlerConfig) -> Self {
+        Self {
+            crawler_type: crawler_type,
+            config: config,
+            logger: logger::Logger::new(None),
+        }
+    }
+
+    pub async fn run(&self) -> CrawlerResponse {
+        let response = match &self.crawler_type {
+            CrawlerType::ValidateCredentials => {
+                let response = crawls::run_validate_credentials_crawler(&self).await;
+                response
             }
-            Crawler::DownloadInvoices(config) => {
-                let response = crawls::run_download_invoices_crawler(
-                    config.credentials.username.clone(), 
-                    config.credentials.password.clone(),
-                ).await?;
-                Ok(response)
+            CrawlerType::DownloadInvoices => {
+                let response = crawls::run_download_invoices_crawler(&self).await;
+                response
+            }
+        };
+        match response {
+            Ok(response) => response,
+            Err(err) => {
+                info!("Crawler error: {:?}", &err);
+                return CrawlerResponse {
+                    success: false,
+                    message: format!("Crawler error: {:?}", err),
+                };
             }
         }
     }
