@@ -17,12 +17,7 @@ pub async fn run_download_invoices_crawler(
         }
     });
 
-    let _page = login(
-        &browser,
-        crawler.config.credentials.username.clone(),
-        crawler.config.credentials.password.clone(),
-    )
-    .await?;
+    let _page = login(&browser, &crawler).await?;
     do_sleep(10).await;
     Ok(CrawlerResponse {
         success: true,

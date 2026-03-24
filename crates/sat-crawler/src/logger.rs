@@ -1,3 +1,5 @@
+use chrono;
+use std::io::{self, Write};
 use uuid::Uuid;
 
 pub struct Logger {
@@ -17,6 +19,7 @@ impl Logger {
     }
 
     pub fn info(&self, message: &str) {
-        println!("[INFO] {}", message);
+        let str_datetime = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        eprintln!("[INFO] {} {}", str_datetime, message);
     }
 }

@@ -9,7 +9,9 @@ use tracing::info;
 pub async fn run_validate_credentials_crawler(
     crawler: &Crawler,
 ) -> Result<CrawlerResponse, Box<dyn std::error::Error>> {
-    info!("run_validate_credentials Starting crawler...");
+    crawler
+        .logger
+        .info("run_validate_credentials Starting crawler...");
     let dir = tempdir()?;
 
     let mut browser_config_builder = BrowserConfig::builder().user_data_dir(dir.path());
@@ -32,18 +34,17 @@ pub async fn run_validate_credentials_crawler(
         }
     });
 
-    info!("Browser launched, navingating to login page");
+    crawler
+        .logger
+        .info("Browser launched, navingating to login page");
 
-    let page = login(
-        &browser,
-        crawler.config.credentials.username.clone(),
-        crawler.config.credentials.password.clone(),
-    )
-    .await?;
+    let page = login(&browser, &crawler).await?;
     do_sleep(2).await;
     page.wait_for_navigation().await?;
 
-    info!("CHecking for error message on the page");
+    crawler
+        .logger
+        .info("CHecking for error message on the page");
 
     match page.find_element("#msgError").await {
         Ok(error_element) => {
