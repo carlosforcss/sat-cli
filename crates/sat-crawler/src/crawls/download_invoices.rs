@@ -16,23 +16,12 @@ async fn filter_by_date(crawler: &Crawler, page: &Page) -> Result<(), Box<dyn Er
     do_sleep(5).await;
 
     crawler.logger.info("Selecting date filter option");
-    page.find_element("#ctl00_MainContent_RdoFechas")
-        .await?
-        .click()
-        .await?;
-    // Click the "Por Fechas" radio and wait for the ASP.NET UpdatePanel postback
-    page.find_element("input#ctl00_MainContent_RdoFechas")
-        .await?
-        .click()
-        .await?;
+    // Use JS click to bypass Bootstrap's absolute-positioned radio hit-test offset
     page.evaluate(
-        r#"
-        __doPostBack('ctl00$MainContent$RdoFechas', '')
-    "#,
+        "document.querySelector('#ctl00_MainContent_RdoFechas').click()",
     )
     .await?;
-
-    do_sleep(10).await;
+    do_sleep(5).await;
 
     crawler.logger.info("Getting start date input");
     let start_date_input = page
@@ -59,9 +48,26 @@ async fn filter_by_date(crawler: &Crawler, page: &Page) -> Result<(), Box<dyn Er
     let end_date_input = page
         .find_element("#ctl00_MainContent_CldFechaFinal2_Calendario_text")
         .await?;
-    end_date_input.focus().await?;
-    crawler.logger.info("Typing end date");
-    end_date_input.type_str("01/01/2026").await?;
+    end_date_input.click().await?;
+    page.evaluate(r#"
+        document.querySelector('#ctl00_MainContent_CldFechaFinal2_Calendario_text').value = '31/12/2025'
+    "#).await?;
+    for (selector, value) in [
+        ("#ctl00_MainContent_CldFechaFinal2_DdlHora", "23"),
+        ("#ctl00_MainContent_CldFechaFinal2_DdlMinuto", "59"),
+        ("#ctl00_MainContent_CldFechaFinal2_DdlSegundo", "59"),
+    ] {
+        page.evaluate_expression(&format!(
+            "document.querySelector('{selector}').value = '{value}'"
+        ))
+        .await?;
+    }
+    crawler.logger.info("Clicking search button");
+    page.evaluate(
+        "document.querySelector('#ctl00_MainContent_BtnBusqueda').click()",
+    )
+    .await?;
+    do_sleep(10).await;
     Ok(())
 }
 
