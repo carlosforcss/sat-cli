@@ -1,6 +1,9 @@
 use crate::crawls::steps::login::login;
-use crate::utils::do_sleep;
+use crate::utils::{do_sleep, get_download_folder};
 use crate::{Crawler, CrawlerResponse};
+use chromiumoxide::cdp::browser_protocol::browser::{
+    SetDownloadBehaviorBehavior, SetDownloadBehaviorParams,
+};
 use chromiumoxide::{Browser, BrowserConfig, Page};
 use futures::StreamExt;
 use std::error::Error;
@@ -17,10 +20,8 @@ async fn filter_by_date(crawler: &Crawler, page: &Page) -> Result<(), Box<dyn Er
 
     crawler.logger.info("Selecting date filter option");
     // Use JS click to bypass Bootstrap's absolute-positioned radio hit-test offset
-    page.evaluate(
-        "document.querySelector('#ctl00_MainContent_RdoFechas').click()",
-    )
-    .await?;
+    page.evaluate("document.querySelector('#ctl00_MainContent_RdoFechas').click()")
+        .await?;
     do_sleep(5).await;
 
     crawler.logger.info("Getting start date input");
@@ -63,19 +64,133 @@ async fn filter_by_date(crawler: &Crawler, page: &Page) -> Result<(), Box<dyn Er
         .await?;
     }
     crawler.logger.info("Clicking search button");
-    page.evaluate(
-        "document.querySelector('#ctl00_MainContent_BtnBusqueda').click()",
-    )
-    .await?;
+    page.evaluate("document.querySelector('#ctl00_MainContent_BtnBusqueda').click()")
+        .await?;
     do_sleep(10).await;
+    Ok(())
+}
+
+pub async fn download_current_page_invoices(
+    crawler: &Crawler,
+    page: &Page,
+) -> Result<(), Box<dyn Error>> {
+    crawler
+        .logger
+        .info("Downloading invoices metadata from current page");
+    let invoice_rows = page
+        .find_elements("#ctl00_MainContent_tblResult tbody tr")
+        .await?;
+    crawler
+        .logger
+        .info(&format!("Found {} rows on page", invoice_rows.len()));
+    let download_path = get_download_folder();
+    for row in invoice_rows.into_iter() {
+        let cells = row.find_elements(":scope > td").await?;
+        if cells.len() < 13 {
+            continue; // skip header row (<th> only) and any short footer/pagination rows
+        }
+        let uuid = cells[0]
+            .find_element("input.ListaFolios")
+            .await?
+            .attribute("value")
+            .await?
+            .unwrap_or_default();
+        let fiscal_id = cells[1]
+            .find_element("span")
+            .await?
+            .inner_text()
+            .await?
+            .unwrap_or_default();
+        let issuer_tax_id = cells[2]
+            .find_element("span")
+            .await?
+            .inner_text()
+            .await?
+            .unwrap_or_default();
+        let issuer_name = cells[3]
+            .find_element("span")
+            .await?
+            .inner_text()
+            .await?
+            .unwrap_or_default();
+        let receiver_tax_id = cells[4]
+            .find_element("span")
+            .await?
+            .inner_text()
+            .await?
+            .unwrap_or_default();
+        let receiver_name = cells[5]
+            .find_element("span")
+            .await?
+            .inner_text()
+            .await?
+            .unwrap_or_default();
+        let issued_at = cells[6]
+            .find_element("span")
+            .await?
+            .inner_text()
+            .await?
+            .unwrap_or_default();
+        let certified_at = cells[7]
+            .find_element("span")
+            .await?
+            .inner_text()
+            .await?
+            .unwrap_or_default();
+        let pac = cells[8]
+            .find_element("span")
+            .await?
+            .inner_text()
+            .await?
+            .unwrap_or_default();
+        let total = cells[9]
+            .find_element("span")
+            .await?
+            .inner_text()
+            .await?
+            .unwrap_or_default();
+        let invoice_type = cells[10]
+            .find_element("span")
+            .await?
+            .inner_text()
+            .await?
+            .unwrap_or_default();
+        let invoice_status = cells[12]
+            .find_element("span")
+            .await?
+            .inner_text()
+            .await?
+            .unwrap_or_default();
+        crawler.logger.info(&format!(
+            "Invoice {} | {} | {} | {} -> {} | {} | {} | {} | {} | {} | {}",
+            uuid,
+            fiscal_id,
+            issuer_tax_id,
+            issuer_name,
+            receiver_tax_id,
+            receiver_name,
+            issued_at,
+            certified_at,
+            total,
+            invoice_type,
+            invoice_status
+        ));
+        cells[0].find_element("#BtnDescarga").await?.click().await?;
+        do_sleep(1).await;
+        cells[0].find_element("#BtnRI").await?.click().await?;
+        do_sleep(1).await;
+        crawler
+            .logger
+            .info(&format!("Downloaded {} to {}", uuid, download_path));
+    }
     Ok(())
 }
 
 pub async fn run_download_invoices_crawler(
     crawler: &Crawler,
 ) -> Result<CrawlerResponse, Box<dyn Error>> {
+    crawler.logger.info("Setting up browser configuration");
     let dir = tempdir()?;
-
     let (browser, mut handler) = Browser::launch(
         BrowserConfig::builder()
             .with_head()
@@ -84,15 +199,30 @@ pub async fn run_download_invoices_crawler(
     )
     .await?;
 
+    crawler.logger.info("Starting browser event handler");
     let _ = tokio::spawn(async move {
         loop {
             let _ = handler.next().await.unwrap();
         }
     });
 
+    crawler
+        .logger
+        .info("Setting up download behavior for browser");
+    browser
+        .execute(SetDownloadBehaviorParams {
+            behavior: SetDownloadBehaviorBehavior::Allow,
+            download_path: Some(get_download_folder()),
+            browser_context_id: None,
+            events_enabled: Some(true),
+        })
+        .await?;
+
+    crawler.logger.info("Starting download invoices crawler");
     let page = login(&browser, &crawler).await?;
     do_sleep(1).await;
     filter_by_date(&crawler, &page).await?;
+    download_current_page_invoices(&crawler, &page).await?;
     do_sleep(10).await;
     Ok(CrawlerResponse {
         success: true,

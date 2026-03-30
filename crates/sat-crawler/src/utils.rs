@@ -30,3 +30,7 @@ pub async fn solve_captcha(image_path: &str) -> Result<String, Box<dyn std::erro
     }
     return Err("NO code found in captcha result".into());
 }
+
+pub fn get_download_folder() -> String {
+    env::var("DOWNLOAD_FOLDER").unwrap_or_else(|_| "downloads".to_string())
+}
