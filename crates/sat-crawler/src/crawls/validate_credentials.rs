@@ -4,7 +4,6 @@ use crate::{Crawler, CrawlerResponse};
 use chromiumoxide::{Browser, BrowserConfig};
 use futures::StreamExt;
 use tempfile::tempdir;
-use tracing::info;
 
 pub async fn run_validate_credentials_crawler(
     crawler: &Crawler,

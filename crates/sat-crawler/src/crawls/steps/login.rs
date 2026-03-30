@@ -1,7 +1,7 @@
+use crate::utils::do_sleep;
 use crate::utils::{create_tmp_file, solve_captcha};
 use crate::Crawler;
 use chromiumoxide::{Browser, Page};
-use tracing::info;
 
 pub const LOGIN_URL: &str = "https://portalcfdi.facturaelectronica.sat.gob.mx/";
 
@@ -11,6 +11,7 @@ pub async fn login(
 ) -> Result<Page, Box<dyn std::error::Error>> {
     let page = browser.new_page(LOGIN_URL).await?;
     page.wait_for_navigation().await?;
+    do_sleep(1).await;
 
     // Set username
     crawler.logger.info("Getting element input#rfc");
