@@ -1,39 +1,14 @@
+mod config;
 mod crawls;
 mod logger;
 mod utils;
-
+pub use crate::config::CrawlerConfig;
 use serde::{Deserialize, Serialize};
-use tracing::info;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrawlerResponse {
     pub success: bool,
     pub message: String,
-}
-
-pub struct Credentials {
-    pub username: String,
-    pub password: String,
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct CrawlerOptions {
-    pub headless: Option<bool>,
-    pub sandbox: Option<bool>,
-}
-
-pub struct CrawlerConfig {
-    pub credentials: Credentials,
-    pub options: CrawlerOptions,
-}
-
-impl CrawlerConfig {
-    pub fn new(credentials: Credentials, opts: CrawlerOptions) -> Self {
-        Self {
-            credentials: credentials,
-            options: opts,
-        }
-    }
 }
 
 pub enum CrawlerType {
@@ -70,7 +45,6 @@ impl Crawler {
         match response {
             Ok(response) => response,
             Err(err) => {
-                info!("Crawler error: {:?}", &err);
                 return CrawlerResponse {
                     success: false,
                     message: format!("Crawler error: {:?}", err),
