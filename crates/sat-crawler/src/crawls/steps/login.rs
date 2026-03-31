@@ -1,4 +1,3 @@
-use crate::utils::do_sleep;
 use crate::utils::{create_tmp_file, solve_captcha};
 use crate::Crawler;
 use chromiumoxide::{Browser, Page};

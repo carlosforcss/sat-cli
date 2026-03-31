@@ -45,13 +45,14 @@ impl Command {
         match &self {
             Command::Help => println!("Executing help command"),
             Command::ValidateCredentials { username, password } => {
-                let config = CrawlerConfig::new(
-                    Credentials {
-                        username: username.clone(),
-                        password: password.clone(),
-                    },
-                    options,
-                );
+                let config_builder = CrawlerConfig::builder()
+                    .with_credentials(username.clone(), password.clone())
+                    .with_head();
+
+                let config = config_builder
+                    .build()
+                    .expect("Error building crawler config");
+
                 let crawler = Crawler::new(CrawlerType::ValidateCredentials, config);
                 let response = crawler.run().await;
                 println!(

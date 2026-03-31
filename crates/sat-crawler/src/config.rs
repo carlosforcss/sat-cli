@@ -68,4 +68,8 @@ impl CrawlerConfig {
             options: opts,
         }
     }
+
+    pub fn builder() -> CrawlerConfigBuilder {
+        CrawlerConfigBuilder::new()
+    }
 }

@@ -1,5 +1,4 @@
 use chrono;
-use std::io::{self, Write};
 use uuid::Uuid;
 
 pub struct Logger {

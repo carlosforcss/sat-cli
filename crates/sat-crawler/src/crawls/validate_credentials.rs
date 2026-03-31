@@ -1,9 +1,7 @@
 use crate::crawls::steps::login::login;
 use crate::utils::do_sleep;
 use crate::{Crawler, CrawlerResponse};
-use chromiumoxide::{Browser, BrowserConfig};
 use futures::StreamExt;
-use tempfile::tempdir;
 
 pub async fn run_validate_credentials_crawler(
     crawler: &Crawler,
@@ -11,22 +9,8 @@ pub async fn run_validate_credentials_crawler(
     crawler
         .logger
         .info("run_validate_credentials Starting crawler...");
-    let dir = tempdir()?;
 
-    let mut browser_config_builder = BrowserConfig::builder().user_data_dir(dir.path());
-
-    if !crawler.config.options.headless {
-        browser_config_builder = browser_config_builder.with_head().clone();
-    }
-
-    if !crawler.config.options.sandbox {
-        browser_config_builder = browser_config_builder.no_sandbox().clone();
-    }
-
-    let browser_config = browser_config_builder.build()?;
-
-    let (browser, mut handler) = Browser::launch(browser_config).await?;
-
+    let (browser, mut handler) = crawler.build_browser().await?;
     let _ = tokio::spawn(async move {
         loop {
             let _ = handler.next().await.unwrap();

@@ -150,7 +150,7 @@ pub async fn download_current_page_invoices(
             .inner_text()
             .await?
             .unwrap_or_default();
-        let pac = cells[8]
+        let _pac = cells[8]
             .find_element("span")
             .await?
             .inner_text()
