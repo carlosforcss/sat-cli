@@ -15,11 +15,11 @@ pub async fn run_validate_credentials_crawler(
 
     let mut browser_config_builder = BrowserConfig::builder().user_data_dir(dir.path());
 
-    if crawler.config.options.headless.unwrap_or(true) {
+    if !crawler.config.options.headless {
         browser_config_builder = browser_config_builder.with_head().clone();
     }
 
-    if crawler.config.options.sandbox.unwrap_or(false) == false {
+    if !crawler.config.options.sandbox {
         browser_config_builder = browser_config_builder.no_sandbox().clone();
     }
 
