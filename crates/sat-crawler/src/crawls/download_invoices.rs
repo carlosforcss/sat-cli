@@ -203,14 +203,8 @@ pub async fn run_download_invoices_crawler(
     crawler: &Crawler,
 ) -> Result<CrawlerResponse, Box<dyn Error>> {
     crawler.logger.info("Setting up browser configuration");
-    let dir = tempdir()?;
-    let (browser, mut handler) = Browser::launch(
-        BrowserConfig::builder()
-            .with_head()
-            .user_data_dir(dir.path())
-            .build()?,
-    )
-    .await?;
+
+    let (browser, mut handler) = crawler.build_browser().await?;
 
     crawler.logger.info("Starting browser event handler");
     let _ = tokio::spawn(async move {
