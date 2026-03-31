@@ -2,7 +2,7 @@ mod config;
 mod crawls;
 mod logger;
 mod utils;
-pub use crate::config::CrawlerConfig;
+pub use crate::config::{CrawlerConfig, CrawlerOptions, Credentials};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
