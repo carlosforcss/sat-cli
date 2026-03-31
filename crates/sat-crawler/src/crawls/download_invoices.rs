@@ -4,10 +4,9 @@ use crate::{Crawler, CrawlerResponse};
 use chromiumoxide::cdp::browser_protocol::browser::{
     SetDownloadBehaviorBehavior, SetDownloadBehaviorParams,
 };
-use chromiumoxide::{Browser, BrowserConfig, Page};
+use chromiumoxide::Page;
 use futures::StreamExt;
 use std::error::Error;
-use tempfile::tempdir;
 
 const ISSUED_INVOICES_URL: &str =
     "https://portalcfdi.facturaelectronica.sat.gob.mx/ConsultaEmisor.aspx";
