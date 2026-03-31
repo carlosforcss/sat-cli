@@ -1,5 +1,5 @@
 use crate::crawls::steps::login::login;
-use crate::utils::{do_sleep, get_download_folder};
+use crate::utils::{do_sleep, get_all_date_filters, get_download_folder};
 use crate::{Crawler, CrawlerResponse};
 use chromiumoxide::cdp::browser_protocol::browser::{
     SetDownloadBehaviorBehavior, SetDownloadBehaviorParams,
@@ -12,7 +12,12 @@ use tempfile::tempdir;
 const ISSUED_INVOICES_URL: &str =
     "https://portalcfdi.facturaelectronica.sat.gob.mx/ConsultaEmisor.aspx";
 
-async fn filter_by_date(crawler: &Crawler, page: &Page) -> Result<(), Box<dyn Error>> {
+async fn filter_by_date(
+    crawler: &Crawler,
+    page: &Page,
+    start_date: String,
+    end_date: String,
+) -> Result<(), Box<dyn Error>> {
     crawler.logger.info("Navigating to issued invoices page");
     page.goto(ISSUED_INVOICES_URL).await?;
     page.wait_for_navigation().await?;
@@ -29,9 +34,13 @@ async fn filter_by_date(crawler: &Crawler, page: &Page) -> Result<(), Box<dyn Er
         .find_element("#ctl00_MainContent_CldFechaInicial2_Calendario_text")
         .await?;
     start_date_input.click().await?;
-    page.evaluate(r#"
-        document.querySelector('#ctl00_MainContent_CldFechaInicial2_Calendario_text').value = '01/01/2025'
-    "#).await?;
+    page.evaluate(format!(
+        r#"
+        document.querySelector('#ctl00_MainContent_CldFechaInicial2_Calendario_text').value = '{}'
+    "#,
+        start_date
+    ))
+    .await?;
     for (selector, value) in [
         ("#ctl00_MainContent_CldFechaInicial2_DdlHora", "0"),
         ("#ctl00_MainContent_CldFechaInicial2_DdlMinuto", "0"),
@@ -50,9 +59,13 @@ async fn filter_by_date(crawler: &Crawler, page: &Page) -> Result<(), Box<dyn Er
         .find_element("#ctl00_MainContent_CldFechaFinal2_Calendario_text")
         .await?;
     end_date_input.click().await?;
-    page.evaluate(r#"
-        document.querySelector('#ctl00_MainContent_CldFechaFinal2_Calendario_text').value = '31/12/2025'
-    "#).await?;
+    page.evaluate(format!(
+        r#"
+        document.querySelector('#ctl00_MainContent_CldFechaFinal2_Calendario_text').value = '{}'
+    "#,
+        end_date
+    ))
+    .await?;
     for (selector, value) in [
         ("#ctl00_MainContent_CldFechaFinal2_DdlHora", "23"),
         ("#ctl00_MainContent_CldFechaFinal2_DdlMinuto", "59"),
@@ -221,8 +234,15 @@ pub async fn run_download_invoices_crawler(
     crawler.logger.info("Starting download invoices crawler");
     let page = login(&browser, &crawler).await?;
     do_sleep(1).await;
-    filter_by_date(&crawler, &page).await?;
-    download_current_page_invoices(&crawler, &page).await?;
+    let ranges = get_all_date_filters();
+    for (range_start, range_end) in ranges {
+        crawler.logger.info(&format!(
+            "Processing date range: {} - {}",
+            range_start, range_end
+        ));
+        filter_by_date(&crawler, &page, range_start, range_end).await?;
+        download_current_page_invoices(&crawler, &page).await?;
+    }
     do_sleep(10).await;
     Ok(CrawlerResponse {
         success: true,

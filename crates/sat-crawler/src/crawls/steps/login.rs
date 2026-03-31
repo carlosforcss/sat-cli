@@ -11,7 +11,6 @@ pub async fn login(
 ) -> Result<Page, Box<dyn std::error::Error>> {
     let page = browser.new_page(LOGIN_URL).await?;
     page.wait_for_navigation().await?;
-    do_sleep(1).await;
 
     // Set username
     crawler.logger.info("Getting element input#rfc");

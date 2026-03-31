@@ -1,4 +1,5 @@
 use base64::{engine::general_purpose, Engine as _};
+use chrono::Datelike;
 use std::{env, fs};
 use tempfile;
 use tokio::time::{sleep, Duration};
@@ -33,4 +34,27 @@ pub async fn solve_captcha(image_path: &str) -> Result<String, Box<dyn std::erro
 
 pub fn get_download_folder() -> String {
     env::var("DOWNLOAD_FOLDER").unwrap_or_else(|_| "downloads".to_string())
+}
+
+pub fn set_mx_date_format(date: chrono::NaiveDate) -> String {
+    date.format("%d/%m/%Y").to_string()
+}
+
+pub fn get_all_date_filters() -> Vec<(String, String)> {
+    let mut filters: Vec<(String, String)> = vec![];
+    let range_end = chrono::Utc::now().date_naive();
+    let range_start = chrono::NaiveDate::from_ymd_opt(2020, 1, 1).unwrap();
+    let mut year = range_start.year();
+    while year < range_end.year() {
+        filters.push((
+            set_mx_date_format(chrono::NaiveDate::from_ymd_opt(year, 1, 1).unwrap()),
+            set_mx_date_format(chrono::NaiveDate::from_ymd_opt(year, 12, 31).unwrap()),
+        ));
+        year += 1
+    }
+    filters.push((
+        set_mx_date_format(chrono::NaiveDate::from_ymd_opt(range_end.year(), 1, 1).unwrap()),
+        set_mx_date_format(range_end),
+    ));
+    filters
 }
