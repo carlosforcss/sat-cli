@@ -1,14 +1,20 @@
+use dirs;
+use serde::{Deserialize, Serialize};
+use std::fs;
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Credentials {
     pub username: String,
     pub password: String,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct CrawlerOptions {
     pub headless: bool,
     pub sandbox: bool,
 }
 
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct CrawlerConfig {
     pub credentials: Credentials,
     pub options: CrawlerOptions,
@@ -63,10 +69,39 @@ impl CrawlerConfigBuilder {
 
 impl CrawlerConfig {
     pub fn new(credentials: Credentials, opts: CrawlerOptions) -> Self {
-        Self {
+        let instance = Self {
             credentials: credentials,
             options: opts,
+        };
+        instance.update_configuration_file();
+        instance
+    }
+
+    pub fn new_from_file() -> Self {
+        if !Self::check_if_config_json_exists() {
+            return Self::default();
         }
+        let home = dirs::home_dir().unwrap().join("sat-cli");
+        let config_path = home.to_str().unwrap();
+        let config_json = fs::read_to_string(format!("{}/config.json", config_path)).unwrap();
+        serde_json::from_str(&config_json).unwrap()
+    }
+
+    pub fn update_configuration_file(&self) {
+        let config_dir = dirs::home_dir().unwrap().join("sat-cli");
+        let config_json = serde_json::to_string_pretty(&self).unwrap();
+        fs::create_dir_all(config_dir.to_str().unwrap()).unwrap();
+        fs::write(
+            format!("{}/config.json", config_dir.to_str().unwrap()),
+            config_json,
+        )
+        .unwrap();
+    }
+
+    fn check_if_config_json_exists() -> bool {
+        let home = dirs::home_dir().unwrap();
+        let config_path = home.join("sat-cli").join("config.json");
+        config_path.exists()
     }
 
     pub fn builder() -> CrawlerConfigBuilder {

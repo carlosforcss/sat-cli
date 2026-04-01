@@ -41,18 +41,12 @@ impl Command {
     }
 
     async fn run(&self) {
-        let options = CrawlerOptions::default();
+        let mut config = CrawlerConfig::new_from_file();
         match &self {
             Command::Help => println!("Executing help command"),
             Command::ValidateCredentials { username, password } => {
-                let config_builder = CrawlerConfig::builder()
-                    .with_credentials(username.clone(), password.clone())
-                    .with_head();
-
-                let config = config_builder
-                    .build()
-                    .expect("Error building crawler config");
-
+                config.credentials.username = username.clone();
+                config.credentials.password = password.clone();
                 let crawler = Crawler::new(CrawlerType::ValidateCredentials, config);
                 let response = crawler.run().await;
                 println!(
@@ -61,13 +55,8 @@ impl Command {
                 );
             }
             Command::DownloadInvoices { username, password } => {
-                let config = CrawlerConfig::new(
-                    Credentials {
-                        username: username.clone(),
-                        password: password.clone(),
-                    },
-                    options,
-                );
+                config.credentials.username = username.clone();
+                config.credentials.password = password.clone();
                 let crawler = Crawler::new(CrawlerType::DownloadInvoices, config);
                 let response = crawler.run().await;
                 println!(

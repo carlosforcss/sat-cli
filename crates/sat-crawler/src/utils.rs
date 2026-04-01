@@ -1,5 +1,6 @@
 use base64::{engine::general_purpose, Engine as _};
 use chrono::Datelike;
+use dirs;
 use std::{env, fs};
 use tempfile;
 use tokio::time::{sleep, Duration};
@@ -33,7 +34,18 @@ pub async fn solve_captcha(image_path: &str) -> Result<String, Box<dyn std::erro
 }
 
 pub fn get_download_folder() -> String {
-    env::var("DOWNLOAD_FOLDER").unwrap_or_else(|_| "downloads".to_string())
+    let home = dirs::home_dir();
+    let mut download_path = "./documents".to_string();
+    if env::var("SATCLI_DOCUMENTS_FOLDER").is_ok() {
+        download_path = env::var("SASTCLI_DOCUMENTS_FOLDER").unwrap();
+    } else if let Some(home_path) = home {
+        download_path = home_path
+            .join("./sat-cli/documentes")
+            .to_str()
+            .unwrap()
+            .to_string();
+    }
+    return download_path;
 }
 
 pub fn set_mx_date_format(date: chrono::NaiveDate) -> String {
