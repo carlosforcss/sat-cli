@@ -89,111 +89,145 @@ pub async fn download_current_page_invoices(
     crawler
         .logger
         .info("Downloading invoices metadata from current page");
-    let invoice_rows = page
-        .find_elements("#ctl00_MainContent_tblResult tbody tr")
-        .await?;
+
+    let num_pages: u64 = page
+        .evaluate(
+            "document.querySelectorAll('#ctl00_MainContent_pageNavPosition li[id^=\"pg\"]').length",
+        )
+        .await?
+        .into_value()
+        .unwrap_or(0);
+    let num_pages = num_pages.max(1);
     crawler
         .logger
-        .info(&format!("Found {} rows on page", invoice_rows.len()));
+        .info(&format!("Found {} pages with this filter", &num_pages));
     let download_path = get_download_folder();
-    for row in invoice_rows.into_iter() {
-        let cells = row.find_elements(":scope > td").await?;
-        if cells.len() < 13 {
-            continue; // skip header row (<th> only) and any short footer/pagination rows
+
+    for page_num in 1..=num_pages {
+        if num_pages > 1 {
+            crawler.logger.info(&format!(
+                "Navigating to pagination page {}/{}",
+                page_num, num_pages
+            ));
+            page.evaluate(format!("pager.showPage({})", page_num))
+                .await?;
+            do_sleep(1).await;
         }
-        let uuid = cells[0]
-            .find_element("input.ListaFolios")
-            .await?
-            .attribute("value")
-            .await?
-            .unwrap_or_default();
-        let fiscal_id = cells[1]
-            .find_element("span")
-            .await?
-            .inner_text()
-            .await?
-            .unwrap_or_default();
-        let issuer_tax_id = cells[2]
-            .find_element("span")
-            .await?
-            .inner_text()
-            .await?
-            .unwrap_or_default();
-        let issuer_name = cells[3]
-            .find_element("span")
-            .await?
-            .inner_text()
-            .await?
-            .unwrap_or_default();
-        let receiver_tax_id = cells[4]
-            .find_element("span")
-            .await?
-            .inner_text()
-            .await?
-            .unwrap_or_default();
-        let receiver_name = cells[5]
-            .find_element("span")
-            .await?
-            .inner_text()
-            .await?
-            .unwrap_or_default();
-        let issued_at = cells[6]
-            .find_element("span")
-            .await?
-            .inner_text()
-            .await?
-            .unwrap_or_default();
-        let certified_at = cells[7]
-            .find_element("span")
-            .await?
-            .inner_text()
-            .await?
-            .unwrap_or_default();
-        let _pac = cells[8]
-            .find_element("span")
-            .await?
-            .inner_text()
-            .await?
-            .unwrap_or_default();
-        let total = cells[9]
-            .find_element("span")
-            .await?
-            .inner_text()
-            .await?
-            .unwrap_or_default();
-        let invoice_type = cells[10]
-            .find_element("span")
-            .await?
-            .inner_text()
-            .await?
-            .unwrap_or_default();
-        let invoice_status = cells[12]
-            .find_element("span")
-            .await?
-            .inner_text()
-            .await?
-            .unwrap_or_default();
+
+        let invoice_rows = page
+            .find_elements("#ctl00_MainContent_tblResult tbody tr")
+            .await?;
         crawler.logger.info(&format!(
-            "Invoice {} | {} | {} | {} -> {} | {} | {} | {} | {} | {} | {}",
-            uuid,
-            fiscal_id,
-            issuer_tax_id,
-            issuer_name,
-            receiver_tax_id,
-            receiver_name,
-            issued_at,
-            certified_at,
-            total,
-            invoice_type,
-            invoice_status
+            "Found {} rows on page {}",
+            invoice_rows.len(),
+            page_num
         ));
-        cells[0].find_element("#BtnDescarga").await?.click().await?;
-        do_sleep(1).await;
-        cells[0].find_element("#BtnRI").await?.click().await?;
-        do_sleep(1).await;
-        crawler
-            .logger
-            .info(&format!("Downloaded {} to {}", uuid, download_path));
+
+        for row in invoice_rows.into_iter() {
+            // Skip rows hidden by the client-side pager (belong to a different page)
+            let row_style = row.attribute("style").await?.unwrap_or_default();
+            if row_style.contains("display: none") || row_style.contains("display:none") {
+                continue;
+            }
+
+            let cells = row.find_elements(":scope > td").await?;
+            if cells.len() < 13 {
+                continue; // skip header row (<th> only) and any short footer/pagination rows
+            }
+            let uuid = cells[0]
+                .find_element("input.ListaFolios")
+                .await?
+                .attribute("value")
+                .await?
+                .unwrap_or_default();
+            let fiscal_id = cells[1]
+                .find_element("span")
+                .await?
+                .inner_text()
+                .await?
+                .unwrap_or_default();
+            let issuer_tax_id = cells[2]
+                .find_element("span")
+                .await?
+                .inner_text()
+                .await?
+                .unwrap_or_default();
+            let issuer_name = cells[3]
+                .find_element("span")
+                .await?
+                .inner_text()
+                .await?
+                .unwrap_or_default();
+            let receiver_tax_id = cells[4]
+                .find_element("span")
+                .await?
+                .inner_text()
+                .await?
+                .unwrap_or_default();
+            let receiver_name = cells[5]
+                .find_element("span")
+                .await?
+                .inner_text()
+                .await?
+                .unwrap_or_default();
+            let issued_at = cells[6]
+                .find_element("span")
+                .await?
+                .inner_text()
+                .await?
+                .unwrap_or_default();
+            let certified_at = cells[7]
+                .find_element("span")
+                .await?
+                .inner_text()
+                .await?
+                .unwrap_or_default();
+            let _pac = cells[8]
+                .find_element("span")
+                .await?
+                .inner_text()
+                .await?
+                .unwrap_or_default();
+            let total = cells[9]
+                .find_element("span")
+                .await?
+                .inner_text()
+                .await?
+                .unwrap_or_default();
+            let invoice_type = cells[10]
+                .find_element("span")
+                .await?
+                .inner_text()
+                .await?
+                .unwrap_or_default();
+            let invoice_status = cells[12]
+                .find_element("span")
+                .await?
+                .inner_text()
+                .await?
+                .unwrap_or_default();
+            crawler.logger.info(&format!(
+                "Invoice {} | {} | {} | {} -> {} | {} | {} | {} | {} | {} | {}",
+                uuid,
+                fiscal_id,
+                issuer_tax_id,
+                issuer_name,
+                receiver_tax_id,
+                receiver_name,
+                issued_at,
+                certified_at,
+                total,
+                invoice_type,
+                invoice_status
+            ));
+            cells[0].find_element("#BtnDescarga").await?.click().await?;
+            do_sleep(1).await;
+            cells[0].find_element("#BtnRI").await?.click().await?;
+            do_sleep(1).await;
+            crawler
+                .logger
+                .info(&format!("Downloaded {} to {}", uuid, download_path));
+        }
     }
     Ok(())
 }
