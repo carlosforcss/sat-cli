@@ -10,6 +10,7 @@ use std::error::Error;
 
 const ISSUED_INVOICES_URL: &str =
     "https://portalcfdi.facturaelectronica.sat.gob.mx/ConsultaEmisor.aspx";
+const RECEIVED_INVOICES_URL: &str = "https://portalcfdi.facturaelectronica.sat.gob.mx/ConsultaReceptor.aspx";
 
 async fn filter_by_date(
     crawler: &Crawler,
@@ -50,9 +51,6 @@ async fn filter_by_date(
         ))
         .await?;
     }
-    crawler.logger.info("Typing start date");
-    start_date_input.type_str("01/01/2025").await?;
-
     crawler.logger.info("Getting end date input");
     let end_date_input = page
         .find_element("#ctl00_MainContent_CldFechaFinal2_Calendario_text")
@@ -232,6 +230,94 @@ pub async fn download_current_page_invoices(
     Ok(())
 }
 
+
+async fn download_issued_invoices(
+    crawler: &Crawler,
+    page: &Page
+) -> Result<(), Box<dyn Error>> {
+    crawler.logger.info("Downloading issued invoices");
+    do_sleep(1).await;
+    let ranges = get_all_date_filters();
+    for (range_start, range_end) in ranges {
+        crawler.logger.info(&format!(
+            "Processing date range: {} - {}",
+            range_start, range_end
+        ));
+        filter_by_date(&crawler, &page, range_start, range_end).await?;
+        download_current_page_invoices(&crawler, &page).await?;
+    }
+    do_sleep(10).await;
+    Ok(())
+}
+
+async fn filter_by_year_month(
+    crawler: &Crawler,
+    page: &Page,
+    year: u32,
+    month: u32,
+) -> Result<(), Box<dyn Error>> {
+    crawler.logger.info(&format!("Navigating to received invoices page for {}/{}", month, year)); 
+
+    // Click RdoFechas to trigger the UpdatePanel that renders the year/month selectors
+    crawler.logger.info("Selecting date filter (Fecha de Emisión)");
+    page.evaluate("document.querySelector('#ctl00_MainContent_RdoFechas').click()")
+        .await?;
+    do_sleep(5).await;
+
+    crawler.logger.info("Setting year filter");
+    page.evaluate(format!(
+        "document.querySelector('#DdlAnio').value = '{}'; ValidateYear();",
+        year
+    ))
+    .await?;
+    do_sleep(2).await;
+
+    crawler.logger.info("Setting month filter");
+    page.evaluate(format!(
+        "document.querySelector('#ctl00_MainContent_CldFecha_DdlMes').value = '{}'; asignaDia();",
+        month
+    ))
+    .await?;
+    do_sleep(2).await;
+
+    crawler.logger.info("Clicking search button");
+    page.evaluate("document.querySelector('#ctl00_MainContent_BtnBusqueda').click()")
+        .await?;
+    do_sleep(10).await;
+    Ok(())
+}
+
+async fn download_received_invoices(
+    crawler: &Crawler,
+    page: &Page,
+) -> Result<(), Box<dyn Error>> {
+    crawler.logger.info("Downloading received invoices");
+    do_sleep(1).await;
+    let ranges = get_all_date_filters();
+    let now = chrono::Utc::now();
+    let current_year = chrono::Datelike::year(&now) as u32;
+    let current_month = chrono::Datelike::month(&now);
+
+    page.goto(RECEIVED_INVOICES_URL).await?;
+    page.wait_for_navigation().await?;
+    do_sleep(10).await;
+    for (range_start, _) in ranges {
+        let year: u32 = range_start[6..10].parse()?;
+        let max_month = if year == current_year { current_month } else { 12 };
+
+        for month in 1..=max_month {
+            crawler.logger.info(&format!(
+                "Processing received invoices {}/{}",
+                month, year
+            ));
+            filter_by_year_month(crawler, page, year, month).await?;
+            download_current_page_invoices(crawler, page).await?;
+        }
+    }
+    do_sleep(10).await;
+    Ok(())
+}
+
 pub async fn run_download_invoices_crawler(
     crawler: &Crawler,
 ) -> Result<CrawlerResponse, Box<dyn Error>> {
@@ -257,20 +343,10 @@ pub async fn run_download_invoices_crawler(
             events_enabled: Some(true),
         })
         .await?;
-
-    crawler.logger.info("Starting download invoices crawler");
     let page = login(&browser, &crawler).await?;
-    do_sleep(1).await;
-    let ranges = get_all_date_filters();
-    for (range_start, range_end) in ranges {
-        crawler.logger.info(&format!(
-            "Processing date range: {} - {}",
-            range_start, range_end
-        ));
-        filter_by_date(&crawler, &page, range_start, range_end).await?;
-        download_current_page_invoices(&crawler, &page).await?;
-    }
-    do_sleep(10).await;
+    download_received_invoices(&crawler, &page).await?;
+    download_issued_invoices(&crawler, &page).await?;
+    crawler.logger.info("Starting download invoices crawler");
     Ok(CrawlerResponse {
         success: true,
         message: "Invoices downloaded successfully".to_string(),
