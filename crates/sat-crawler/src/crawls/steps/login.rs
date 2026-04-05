@@ -1,11 +1,11 @@
 use crate::utils::{create_tmp_file, solve_captcha};
+use crate::utils::{do_sleep, retry};
 use crate::Crawler;
-use crate::utils::do_sleep;
 use chromiumoxide::{Browser, Page};
 
 pub const LOGIN_URL: &str = "https://portalcfdi.facturaelectronica.sat.gob.mx/";
 
-pub async fn login(
+pub async fn try_to_login(
     browser: &Browser,
     crawler: &Crawler,
 ) -> Result<Page, Box<dyn std::error::Error>> {
@@ -52,7 +52,42 @@ pub async fn login(
     let submit_button = page.find_element("input#submit").await?;
     submit_button.focus().await?;
     submit_button.click().await?;
+    do_sleep(1).await;
     page.wait_for_navigation().await?;
+    let page_url = page.url().await?.unwrap();
+    if page_url.contains("portalcfdi.facturaelectronica.sat.gob.mx") {
+        crawler.logger.info("Credentials are valid");
+        return Ok(page);
+    }
+    dbg!(page_url);
+    let err_message = match page.find_element("#msgError").await {
+        Ok(error_element) => {
+            let error_text = error_element.inner_text().await;
+            let mut message = "Unkown error".to_string();
+            if let Ok(Some(error_text)) = error_text {
+                message = error_text;
+            }
+            crawler
+                .logger
+                .info(&format!("Login failed with error: {}", &message));
+            message
+        }
+        Err(_) => {
+            crawler.logger.info("Login failedd with unkown message");
+            "Unkown error".to_string()
+        }
+    };
 
-    Ok(page)
+    return Err(Box::new(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        "Login failed with message: ".to_string() + &err_message,
+    )));
+}
+
+pub async fn login(
+    browser: &Browser,
+    crawler: &Crawler,
+) -> Result<Page, Box<dyn std::error::Error>> {
+    crawler.logger.info("Trying to login...");
+    retry(|| try_to_login(browser, crawler), 3, 500 as u64).await
 }

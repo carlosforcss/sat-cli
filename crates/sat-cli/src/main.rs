@@ -1,4 +1,4 @@
-use satcrawler::{Crawler, CrawlerConfig, CrawlerOptions, CrawlerType, Credentials};
+use satcrawler::{Crawler, CrawlerConfig, CrawlerType};
 use std::env;
 use tracing::info;
 

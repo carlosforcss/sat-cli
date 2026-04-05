@@ -10,7 +10,8 @@ use std::error::Error;
 
 const ISSUED_INVOICES_URL: &str =
     "https://portalcfdi.facturaelectronica.sat.gob.mx/ConsultaEmisor.aspx";
-const RECEIVED_INVOICES_URL: &str = "https://portalcfdi.facturaelectronica.sat.gob.mx/ConsultaReceptor.aspx";
+const RECEIVED_INVOICES_URL: &str =
+    "https://portalcfdi.facturaelectronica.sat.gob.mx/ConsultaReceptor.aspx";
 
 async fn filter_by_date(
     crawler: &Crawler,
@@ -230,11 +231,7 @@ pub async fn download_current_page_invoices(
     Ok(())
 }
 
-
-async fn download_issued_invoices(
-    crawler: &Crawler,
-    page: &Page
-) -> Result<(), Box<dyn Error>> {
+async fn download_issued_invoices(crawler: &Crawler, page: &Page) -> Result<(), Box<dyn Error>> {
     crawler.logger.info("Downloading issued invoices");
     do_sleep(1).await;
     let ranges = get_all_date_filters();
@@ -256,10 +253,15 @@ async fn filter_by_year_month(
     year: u32,
     month: u32,
 ) -> Result<(), Box<dyn Error>> {
-    crawler.logger.info(&format!("Navigating to received invoices page for {}/{}", month, year)); 
+    crawler.logger.info(&format!(
+        "Navigating to received invoices page for {}/{}",
+        month, year
+    ));
 
     // Click RdoFechas to trigger the UpdatePanel that renders the year/month selectors
-    crawler.logger.info("Selecting date filter (Fecha de Emisión)");
+    crawler
+        .logger
+        .info("Selecting date filter (Fecha de Emisión)");
     page.evaluate("document.querySelector('#ctl00_MainContent_RdoFechas').click()")
         .await?;
     do_sleep(5).await;
@@ -287,10 +289,7 @@ async fn filter_by_year_month(
     Ok(())
 }
 
-async fn download_received_invoices(
-    crawler: &Crawler,
-    page: &Page,
-) -> Result<(), Box<dyn Error>> {
+async fn download_received_invoices(crawler: &Crawler, page: &Page) -> Result<(), Box<dyn Error>> {
     crawler.logger.info("Downloading received invoices");
     do_sleep(1).await;
     let ranges = get_all_date_filters();
@@ -303,13 +302,16 @@ async fn download_received_invoices(
     do_sleep(10).await;
     for (range_start, _) in ranges {
         let year: u32 = range_start[6..10].parse()?;
-        let max_month = if year == current_year { current_month } else { 12 };
+        let max_month = if year == current_year {
+            current_month
+        } else {
+            12
+        };
 
         for month in 1..=max_month {
-            crawler.logger.info(&format!(
-                "Processing received invoices {}/{}",
-                month, year
-            ));
+            crawler
+                .logger
+                .info(&format!("Processing received invoices {}/{}", month, year));
             filter_by_year_month(crawler, page, year, month).await?;
             download_current_page_invoices(crawler, page).await?;
         }

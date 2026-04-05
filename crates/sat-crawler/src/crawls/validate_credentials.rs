@@ -21,32 +21,22 @@ pub async fn run_validate_credentials_crawler(
         .logger
         .info("Browser launched, navingating to login page");
 
-    let page = login(&browser, &crawler).await?;
-    do_sleep(2).await;
-    page.wait_for_navigation().await?;
-
-    crawler
-        .logger
-        .info("CHecking for error message on the page");
-
-    match page.find_element("#msgError").await {
-        Ok(error_element) => {
-            let error_text = error_element.inner_text().await?;
-            let mut message = "Unkown error".to_string();
-            if let Some(error_text) = error_text {
-                message = error_text;
-            }
-            Ok(CrawlerResponse {
-                success: true,
-                message: message,
-            })
-        }
-        Err(_) => {
-            println!("Credentials are valid!");
-            Ok(CrawlerResponse {
+    match login(&browser, &crawler).await {
+        Ok(_) => {
+            crawler.logger.info("Login succesful");
+            return Ok(CrawlerResponse {
                 success: true,
                 message: "Credentials are valid".to_string(),
-            })
+            });
+        }
+        Err(error) => {
+            crawler
+                .logger
+                .info(&format!("Eror during login: {}", error));
+            return Ok(CrawlerResponse {
+                success: false,
+                message: format!("Error during login: {}", error),
+            });
         }
     }
 }

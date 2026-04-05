@@ -1,6 +1,8 @@
 use base64::{engine::general_purpose, Engine as _};
 use chrono::Datelike;
 use dirs;
+use std::error::Error;
+use std::future::Future;
 use std::{env, fs};
 use tempfile;
 use tokio::time::{sleep, Duration};
@@ -69,4 +71,30 @@ pub fn get_all_date_filters() -> Vec<(String, String)> {
         set_mx_date_format(range_end),
     ));
     filters
+}
+
+pub async fn retry<Fut, T, E, F>(mut f: F, max_retries: u32, mil_delay: u64) -> Result<T, E>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<T, E>>,
+    E: std::fmt::Debug,
+{
+    let mut attempts = 0;
+    let delay = Duration::from_millis(mil_delay);
+    loop {
+        match f().await {
+            Ok(result) => return Ok(result),
+            Err(e) if attempts < max_retries => {
+                attempts += 1;
+                println!(
+                    "Attempt {} failed: {:?}. Retrying in {} seconds...",
+                    attempts,
+                    e,
+                    delay.as_secs()
+                );
+                sleep(delay).await;
+            }
+            Err(e) => return Err(e),
+        }
+    }
 }
