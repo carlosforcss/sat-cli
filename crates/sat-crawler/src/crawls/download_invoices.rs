@@ -1,3 +1,4 @@
+use crate::constants::{ISSUED_AT_FORMAT, ISSUED_INVOICES_URL, RECEIVED_INVOICES_URL};
 use crate::crawls::steps::login::login;
 use crate::utils::{do_sleep, get_all_date_filters, get_download_folder, retry};
 use crate::{Crawler, CrawlerResponse};
@@ -6,13 +7,10 @@ use chromiumoxide::cdp::browser_protocol::browser::{
 };
 use chromiumoxide::element::Element;
 use chromiumoxide::Page;
+use chrono::Datelike;
 use futures::StreamExt;
 use std::error::Error;
-
-const ISSUED_INVOICES_URL: &str =
-    "https://portalcfdi.facturaelectronica.sat.gob.mx/ConsultaEmisor.aspx";
-const RECEIVED_INVOICES_URL: &str =
-    "https://portalcfdi.facturaelectronica.sat.gob.mx/ConsultaReceptor.aspx";
+use std::path::Path;
 
 async fn filter_by_date(
     crawler: &Crawler,
@@ -80,6 +78,23 @@ async fn filter_by_date(
         .await?;
     do_sleep(5).await;
     Ok(())
+}
+
+fn should_download_invoice(uuid: &str, issued_at: &str, download_path: &str) -> bool {
+    let xml = Path::new(download_path).join(format!("{}.xml", uuid));
+    let pdf = Path::new(download_path).join(format!("{}.pdf", uuid));
+    let both_exist = xml.exists() && pdf.exists();
+
+    if !both_exist {
+        return true;
+    }
+
+    let now = chrono::Utc::now();
+    let is_current_period = chrono::NaiveDateTime::parse_from_str(issued_at, ISSUED_AT_FORMAT)
+        .map(|dt| dt.year() == now.year() && dt.month() == now.month())
+        .unwrap_or(false);
+
+    is_current_period
 }
 
 async fn process_invoice_row(
@@ -183,6 +198,14 @@ async fn process_invoice_row(
         invoice_type,
         invoice_status
     ));
+
+    if !should_download_invoice(&uuid, &issued_at, download_path) {
+        crawler
+            .logger
+            .info(&format!("Skipping invoice {} (already exists)", uuid));
+        return Ok(());
+    }
+
     match cells[0].find_element("#BtnDescarga").await {
         Ok(download_button) => {
             download_button.click().await?;
@@ -230,7 +253,7 @@ pub async fn download_current_page_invoices(
     crawler
         .logger
         .info(&format!("Found {} pages with this filter", &num_pages));
-    let download_path = get_download_folder();
+    let download_path = get_download_folder(Some(crawler.config.credentials.username.clone()));
 
     for page_num in 1..=num_pages {
         if num_pages > 1 {
@@ -395,7 +418,9 @@ pub async fn run_download_invoices_crawler(
     browser
         .execute(SetDownloadBehaviorParams {
             behavior: SetDownloadBehaviorBehavior::Allow,
-            download_path: Some(get_download_folder()),
+            download_path: Some(get_download_folder(Some(
+                crawler.config.credentials.username.clone(),
+            ))),
             browser_context_id: None,
             events_enabled: Some(true),
         })

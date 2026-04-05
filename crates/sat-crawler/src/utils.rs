@@ -1,7 +1,9 @@
+use crate::constants::{
+    DEFAULT_DOCUMENTS_FOLDER, DOCUMENTS_ENV_VAR, FILTER_START_YEAR, MX_DATE_FORMAT,
+};
 use base64::{engine::general_purpose, Engine as _};
 use chrono::Datelike;
 use dirs;
-use std::error::Error;
 use std::future::Future;
 use std::{env, fs};
 use tempfile;
@@ -35,29 +37,30 @@ pub async fn solve_captcha(image_path: &str) -> Result<String, Box<dyn std::erro
     return Err("NO code found in captcha result".into());
 }
 
-pub fn get_download_folder() -> String {
+pub fn get_download_folder(addition: Option<String>) -> String {
     let home = dirs::home_dir();
-    let mut download_path = "./documents".to_string();
-    if env::var("SATCLI_DOCUMENTS_FOLDER").is_ok() {
-        download_path = env::var("SASTCLI_DOCUMENTS_FOLDER").unwrap();
+    let mut default_folder = DEFAULT_DOCUMENTS_FOLDER.to_string();
+    let mut download_path = default_folder.clone();
+    if let Some(addition) = addition {
+        default_folder.push_str(&addition);
+        download_path.push_str(&addition);
+    }
+    if env::var(DOCUMENTS_ENV_VAR).is_ok() {
+        download_path = env::var(DOCUMENTS_ENV_VAR).unwrap();
     } else if let Some(home_path) = home {
-        download_path = home_path
-            .join("./sat-cli/documents")
-            .to_str()
-            .unwrap()
-            .to_string();
+        download_path = home_path.join(default_folder).to_str().unwrap().to_string();
     }
     return download_path;
 }
 
 pub fn set_mx_date_format(date: chrono::NaiveDate) -> String {
-    date.format("%d/%m/%Y").to_string()
+    date.format(MX_DATE_FORMAT).to_string()
 }
 
 pub fn get_all_date_filters() -> Vec<(String, String)> {
     let mut filters: Vec<(String, String)> = vec![];
     let range_end = chrono::Utc::now().date_naive();
-    let range_start = chrono::NaiveDate::from_ymd_opt(2020, 1, 1).unwrap();
+    let range_start = chrono::NaiveDate::from_ymd_opt(FILTER_START_YEAR, 1, 1).unwrap();
     let mut year = range_start.year();
     while year < range_end.year() {
         filters.push((

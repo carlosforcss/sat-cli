@@ -1,9 +1,7 @@
-use crate::utils::{create_tmp_file, solve_captcha};
-use crate::utils::{do_sleep, retry};
+use crate::constants::LOGIN_URL;
+use crate::utils::{create_tmp_file, do_sleep, retry, solve_captcha};
 use crate::Crawler;
 use chromiumoxide::{Browser, Page};
-
-pub const LOGIN_URL: &str = "https://portalcfdi.facturaelectronica.sat.gob.mx/";
 
 pub async fn try_to_login(
     browser: &Browser,

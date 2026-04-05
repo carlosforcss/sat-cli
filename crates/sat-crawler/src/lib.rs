@@ -1,4 +1,5 @@
 mod config;
+pub mod constants;
 mod crawler;
 mod crawls;
 mod logger;
