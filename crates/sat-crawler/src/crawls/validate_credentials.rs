@@ -1,5 +1,4 @@
 use crate::crawls::steps::login::login;
-use crate::utils::do_sleep;
 use crate::{Crawler, CrawlerResponse};
 use futures::StreamExt;
 

@@ -1,20 +1,10 @@
 use chrono;
-use uuid::Uuid;
 
-pub struct Logger {
-    filename: String,
-}
+pub struct Logger;
 
 impl Logger {
-    pub fn new(filename: Option<String>) -> Self {
-        let filename = match filename {
-            Some(filename) => filename,
-            None => {
-                let uuid = Uuid::new_v4();
-                format!("log_{}.txt", uuid)
-            }
-        };
-        Self { filename: filename }
+    pub fn new() -> Self {
+        Self
     }
 
     pub fn info(&self, message: &str) {

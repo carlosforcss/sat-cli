@@ -27,7 +27,7 @@ impl Crawler {
         Self {
             crawler_type: crawler_type,
             config: config,
-            logger: logger::Logger::new(None),
+            logger: logger::Logger::new(),
         }
     }
 

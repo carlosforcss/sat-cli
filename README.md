@@ -14,22 +14,24 @@ cargo build --release
 cp target/release/sat-cli /usr/local/bin/sat-cli
 ```
 
-## Usage
-
-### Set up 
-```
-export TWOCAPTCHA_API_TOKEN=your_2captcha_api_token
-export DOWNLOAD_FOLDER=your_absolute_download_path (relative /downloads by default) 
-```
-
-### Current working commands
-```bash
-sat-cli validate_credentials RFCXXXX PASSXXXXX
-// Returns if the CIEC credentials are valid or not
-```
+## Configuration
 
 ```bash
-sat-cli download_invoices RFCXXXX PASSXXXX
-Download the invoices for the given CIEC credentials in the /downloads folder from your execution
+export TWOCAPTCHA_API_KEY=your_2captcha_api_key
+export SATCLI_DOCUMENTS_FOLDER=/absolute/path/to/downloads  # optional, defaults to ~/sat-cli/documents/
 ```
 
+Credentials can also be persisted in `~/sat-cli/config.json` and omitted from commands.
+
+## Commands
+
+```bash
+sat-cli docs
+# Lists all available commands
+
+sat-cli crawl validate-credentials --username RFCXXXX --password PASSXXXXX
+# Returns whether the CIEC credentials are valid
+
+sat-cli crawl download-invoices --username RFCXXXX --password PASSXXXXX
+# Downloads all issued and received invoices to the documents folder
+```
