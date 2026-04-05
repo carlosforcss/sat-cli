@@ -10,6 +10,14 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    Crawl {
+        #[command(subcommand)]
+        subcommand: CrawlCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum CrawlCommands {
     ValidateCredentials {
         #[arg(long)]
         username: Option<String>,
@@ -28,35 +36,37 @@ enum Commands {
 async fn main() {
     let cli = Cli::parse();
     match cli.command {
-        Commands::ValidateCredentials { username, password } => {
-            let mut config = CrawlerConfig::new_from_file();
-            if let Some(u) = username {
-                config.credentials.username = u;
+        Commands::Crawl { subcommand } => match subcommand {
+            CrawlCommands::ValidateCredentials { username, password } => {
+                let mut config = CrawlerConfig::new_from_file();
+                if let Some(u) = username {
+                    config.credentials.username = u;
+                }
+                if let Some(p) = password {
+                    config.credentials.password = p;
+                }
+                let crawler = Crawler::new(CrawlerType::ValidateCredentials, config);
+                let response = crawler.run().await;
+                println!(
+                    "{}",
+                    serde_json::to_string(&response).expect("Response serialization error")
+                );
             }
-            if let Some(p) = password {
-                config.credentials.password = p;
+            CrawlCommands::DownloadInvoices { username, password } => {
+                let mut config = CrawlerConfig::new_from_file();
+                if let Some(u) = username {
+                    config.credentials.username = u;
+                }
+                if let Some(p) = password {
+                    config.credentials.password = p;
+                }
+                let crawler = Crawler::new(CrawlerType::DownloadInvoices, config);
+                let response = crawler.run().await;
+                println!(
+                    "{}",
+                    serde_json::to_string(&response).expect("Response serialization error")
+                );
             }
-            let crawler = Crawler::new(CrawlerType::ValidateCredentials, config);
-            let response = crawler.run().await;
-            println!(
-                "{}",
-                serde_json::to_string(&response).expect("Response serialization error")
-            );
-        }
-        Commands::DownloadInvoices { username, password } => {
-            let mut config = CrawlerConfig::new_from_file();
-            if let Some(u) = username {
-                config.credentials.username = u;
-            }
-            if let Some(p) = password {
-                config.credentials.password = p;
-            }
-            let crawler = Crawler::new(CrawlerType::DownloadInvoices, config);
-            let response = crawler.run().await;
-            println!(
-                "{}",
-                serde_json::to_string(&response).expect("Response serialization error")
-            );
-        }
+        },
     }
 }
