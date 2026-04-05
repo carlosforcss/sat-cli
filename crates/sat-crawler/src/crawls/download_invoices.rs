@@ -1,9 +1,10 @@
 use crate::crawls::steps::login::login;
-use crate::utils::{do_sleep, get_all_date_filters, get_download_folder};
+use crate::utils::{do_sleep, get_all_date_filters, get_download_folder, retry};
 use crate::{Crawler, CrawlerResponse};
 use chromiumoxide::cdp::browser_protocol::browser::{
     SetDownloadBehaviorBehavior, SetDownloadBehaviorParams,
 };
+use chromiumoxide::element::Element;
 use chromiumoxide::Page;
 use futures::StreamExt;
 use std::error::Error;
@@ -28,7 +29,7 @@ async fn filter_by_date(
     // Use JS click to bypass Bootstrap's absolute-positioned radio hit-test offset
     page.evaluate("document.querySelector('#ctl00_MainContent_RdoFechas').click()")
         .await?;
-    do_sleep(5).await;
+    do_sleep(1).await;
 
     crawler.logger.info("Getting start date input");
     let start_date_input = page
@@ -77,7 +78,136 @@ async fn filter_by_date(
     crawler.logger.info("Clicking search button");
     page.evaluate("document.querySelector('#ctl00_MainContent_BtnBusqueda').click()")
         .await?;
-    do_sleep(10).await;
+    do_sleep(5).await;
+    Ok(())
+}
+
+async fn process_invoice_row(
+    crawler: &Crawler,
+    row: Element,
+    download_path: &str,
+) -> Result<(), Box<dyn Error>> {
+    let row_style = row.attribute("style").await?.unwrap_or_default();
+    if row_style.contains("display: none") || row_style.contains("display:none") {
+        return Ok(());
+    }
+
+    let cells = row.find_elements(":scope > td").await?;
+    if cells.len() < 13 {
+        return Ok(());
+    }
+
+    let uuid = cells[0]
+        .find_element("input.ListaFolios")
+        .await?
+        .attribute("value")
+        .await?
+        .unwrap_or_default();
+    let fiscal_id = cells[1]
+        .find_element("span")
+        .await?
+        .inner_text()
+        .await?
+        .unwrap_or_default();
+    let issuer_tax_id = cells[2]
+        .find_element("span")
+        .await?
+        .inner_text()
+        .await?
+        .unwrap_or_default();
+    let issuer_name = cells[3]
+        .find_element("span")
+        .await?
+        .inner_text()
+        .await?
+        .unwrap_or_default();
+    let receiver_tax_id = cells[4]
+        .find_element("span")
+        .await?
+        .inner_text()
+        .await?
+        .unwrap_or_default();
+    let receiver_name = cells[5]
+        .find_element("span")
+        .await?
+        .inner_text()
+        .await?
+        .unwrap_or_default();
+    let issued_at = cells[6]
+        .find_element("span")
+        .await?
+        .inner_text()
+        .await?
+        .unwrap_or_default();
+    let certified_at = cells[7]
+        .find_element("span")
+        .await?
+        .inner_text()
+        .await?
+        .unwrap_or_default();
+    let _pac = cells[8]
+        .find_element("span")
+        .await?
+        .inner_text()
+        .await?
+        .unwrap_or_default();
+    let total = cells[9]
+        .find_element("span")
+        .await?
+        .inner_text()
+        .await?
+        .unwrap_or_default();
+    let invoice_type = cells[10]
+        .find_element("span")
+        .await?
+        .inner_text()
+        .await?
+        .unwrap_or_default();
+    let invoice_status = cells[12]
+        .find_element("span")
+        .await?
+        .inner_text()
+        .await?
+        .unwrap_or_default();
+    crawler.logger.info(&format!(
+        "Invoice {} | {} | {} | {} -> {} | {} | {} | {} | {} | {} | {}",
+        uuid,
+        fiscal_id,
+        issuer_tax_id,
+        issuer_name,
+        receiver_tax_id,
+        receiver_name,
+        issued_at,
+        certified_at,
+        total,
+        invoice_type,
+        invoice_status
+    ));
+    match cells[0].find_element("#BtnDescarga").await {
+        Ok(download_button) => {
+            download_button.click().await?;
+            do_sleep(1).await;
+        }
+        Err(_) => {
+            crawler
+                .logger
+                .info(&format!("Download button not found for invoice {}", uuid));
+        }
+    }
+    match cells[0].find_element("#BtnRI").await {
+        Ok(download_button) => {
+            download_button.click().await?;
+        }
+        Err(_) => {
+            crawler.logger.info(&format!(
+                "RI download button not found for invoice {}",
+                uuid
+            ));
+        }
+    }
+    crawler
+        .logger
+        .info(&format!("Downloaded {} to {}", uuid, download_path));
     Ok(())
 }
 
@@ -123,109 +253,11 @@ pub async fn download_current_page_invoices(
         ));
 
         for row in invoice_rows.into_iter() {
-            // Skip rows hidden by the client-side pager (belong to a different page)
-            let row_style = row.attribute("style").await?.unwrap_or_default();
-            if row_style.contains("display: none") || row_style.contains("display:none") {
-                continue;
+            if let Err(e) = process_invoice_row(crawler, row, &download_path).await {
+                crawler
+                    .logger
+                    .info(&format!("Failed to process invoice row: {}", e));
             }
-
-            let cells = row.find_elements(":scope > td").await?;
-            if cells.len() < 13 {
-                continue; // skip header row (<th> only) and any short footer/pagination rows
-            }
-            let uuid = cells[0]
-                .find_element("input.ListaFolios")
-                .await?
-                .attribute("value")
-                .await?
-                .unwrap_or_default();
-            let fiscal_id = cells[1]
-                .find_element("span")
-                .await?
-                .inner_text()
-                .await?
-                .unwrap_or_default();
-            let issuer_tax_id = cells[2]
-                .find_element("span")
-                .await?
-                .inner_text()
-                .await?
-                .unwrap_or_default();
-            let issuer_name = cells[3]
-                .find_element("span")
-                .await?
-                .inner_text()
-                .await?
-                .unwrap_or_default();
-            let receiver_tax_id = cells[4]
-                .find_element("span")
-                .await?
-                .inner_text()
-                .await?
-                .unwrap_or_default();
-            let receiver_name = cells[5]
-                .find_element("span")
-                .await?
-                .inner_text()
-                .await?
-                .unwrap_or_default();
-            let issued_at = cells[6]
-                .find_element("span")
-                .await?
-                .inner_text()
-                .await?
-                .unwrap_or_default();
-            let certified_at = cells[7]
-                .find_element("span")
-                .await?
-                .inner_text()
-                .await?
-                .unwrap_or_default();
-            let _pac = cells[8]
-                .find_element("span")
-                .await?
-                .inner_text()
-                .await?
-                .unwrap_or_default();
-            let total = cells[9]
-                .find_element("span")
-                .await?
-                .inner_text()
-                .await?
-                .unwrap_or_default();
-            let invoice_type = cells[10]
-                .find_element("span")
-                .await?
-                .inner_text()
-                .await?
-                .unwrap_or_default();
-            let invoice_status = cells[12]
-                .find_element("span")
-                .await?
-                .inner_text()
-                .await?
-                .unwrap_or_default();
-            crawler.logger.info(&format!(
-                "Invoice {} | {} | {} | {} -> {} | {} | {} | {} | {} | {} | {}",
-                uuid,
-                fiscal_id,
-                issuer_tax_id,
-                issuer_name,
-                receiver_tax_id,
-                receiver_name,
-                issued_at,
-                certified_at,
-                total,
-                invoice_type,
-                invoice_status
-            ));
-            cells[0].find_element("#BtnDescarga").await?.click().await?;
-            do_sleep(1).await;
-            cells[0].find_element("#BtnRI").await?.click().await?;
-            do_sleep(1).await;
-            crawler
-                .logger
-                .info(&format!("Downloaded {} to {}", uuid, download_path));
         }
     }
     Ok(())
@@ -240,10 +272,15 @@ async fn download_issued_invoices(crawler: &Crawler, page: &Page) -> Result<(), 
             "Processing date range: {} - {}",
             range_start, range_end
         ));
-        filter_by_date(&crawler, &page, range_start, range_end).await?;
-        download_current_page_invoices(&crawler, &page).await?;
+        retry(
+            || filter_by_date(&crawler, &page, range_start.clone(), range_end.clone()),
+            3,
+            500,
+        )
+        .await?;
+        retry(|| download_current_page_invoices(&crawler, &page), 3, 500).await?;
+        do_sleep(1).await;
     }
-    do_sleep(10).await;
     Ok(())
 }
 
@@ -264,7 +301,7 @@ async fn filter_by_year_month(
         .info("Selecting date filter (Fecha de Emisión)");
     page.evaluate("document.querySelector('#ctl00_MainContent_RdoFechas').click()")
         .await?;
-    do_sleep(5).await;
+    do_sleep(1).await;
 
     crawler.logger.info("Setting year filter");
     page.evaluate(format!(
@@ -272,7 +309,6 @@ async fn filter_by_year_month(
         year
     ))
     .await?;
-    do_sleep(2).await;
 
     crawler.logger.info("Setting month filter");
     page.evaluate(format!(
@@ -280,12 +316,11 @@ async fn filter_by_year_month(
         month
     ))
     .await?;
-    do_sleep(2).await;
 
     crawler.logger.info("Clicking search button");
     page.evaluate("document.querySelector('#ctl00_MainContent_BtnBusqueda').click()")
         .await?;
-    do_sleep(10).await;
+    do_sleep(1).await;
     Ok(())
 }
 
@@ -297,9 +332,8 @@ async fn download_received_invoices(crawler: &Crawler, page: &Page) -> Result<()
     let current_year = chrono::Datelike::year(&now) as u32;
     let current_month = chrono::Datelike::month(&now);
 
-    page.goto(RECEIVED_INVOICES_URL).await?;
     page.wait_for_navigation().await?;
-    do_sleep(10).await;
+    do_sleep(1).await;
     for (range_start, _) in ranges {
         let year: u32 = range_start[6..10].parse()?;
         let max_month = if year == current_year {
@@ -308,13 +342,34 @@ async fn download_received_invoices(crawler: &Crawler, page: &Page) -> Result<()
             12
         };
 
+        page.goto(RECEIVED_INVOICES_URL).await?;
+
         for month in 1..=max_month {
             crawler
                 .logger
                 .info(&format!("Processing received invoices {}/{}", month, year));
-            filter_by_year_month(crawler, page, year, month).await?;
-            download_current_page_invoices(crawler, page).await?;
+            match retry(|| filter_by_year_month(crawler, page, year, month), 3, 500).await {
+                Ok(_) => {}
+                Err(e) => {
+                    crawler.logger.info(&format!(
+                        "Failed to filter receivedi nvoices for {}/{}: {}",
+                        month, year, e
+                    ));
+                    continue;
+                }
+            };
+            match retry(|| download_current_page_invoices(crawler, page), 3, 500).await {
+                Ok(_) => {}
+                Err(e) => {
+                    crawler.logger.info(&format!(
+                        "Failed to download received invoices for {}/{}: {}",
+                        month, year, e
+                    ));
+                    continue;
+                }
+            };
         }
+        do_sleep(10).await;
     }
     do_sleep(10).await;
     Ok(())
@@ -349,6 +404,9 @@ pub async fn run_download_invoices_crawler(
     download_received_invoices(&crawler, &page).await?;
     download_issued_invoices(&crawler, &page).await?;
     crawler.logger.info("Starting download invoices crawler");
+    // Delay to ensure all download are completed before closing the browser
+    crawler.logger.info("Waiting for download to complete...");
+    do_sleep(120).await;
     Ok(CrawlerResponse {
         success: true,
         message: "Invoices downloaded successfully".to_string(),

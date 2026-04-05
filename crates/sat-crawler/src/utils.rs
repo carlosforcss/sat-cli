@@ -42,7 +42,7 @@ pub fn get_download_folder() -> String {
         download_path = env::var("SASTCLI_DOCUMENTS_FOLDER").unwrap();
     } else if let Some(home_path) = home {
         download_path = home_path
-            .join("./sat-cli/documentes")
+            .join("./sat-cli/documents")
             .to_str()
             .unwrap()
             .to_string();
