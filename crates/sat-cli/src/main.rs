@@ -70,6 +70,12 @@ async fn main() {
         }
         Commands::Docs => {
             println!("sat-cli — available commands:\n");
+            println!("  docs");
+            println!("      Lists all available commands.");
+            println!();
+            println!("  doctor");
+            println!("      Checks environment configuration and reports any issues.");
+            println!();
             println!(
                 "  crawl validate-credentials [--username <USERNAME>] [--password <PASSWORD>]"
             );

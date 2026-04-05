@@ -29,6 +29,9 @@ Credentials can also be persisted in `~/sat-cli/config.json` and omitted from co
 sat-cli docs
 # Lists all available commands
 
+sat-cli doctor
+# Checks environment configuration and reports any issues
+
 sat-cli crawl validate-credentials --username RFCXXXX --password PASSXXXXX
 # Returns whether the CIEC credentials are valid
 
