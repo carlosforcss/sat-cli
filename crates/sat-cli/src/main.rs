@@ -1,6 +1,31 @@
 use clap::{Parser, Subcommand};
-use satcrawler::{Crawler, CrawlerConfig, CrawlerType};
+use satcrawler::{Crawler, CrawlerConfig, CrawlerOptions, CrawlerType, Credentials, LoginType};
 use std::env;
+use std::io::{self, Write};
+
+fn prompt(label: &str) -> String {
+    print!("{}", label);
+    io::stdout().flush().unwrap();
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).unwrap();
+    input.trim().to_string()
+}
+
+fn resolve_path(p: String) -> String {
+    let expanded = if p.starts_with("~/") || p == "~" {
+        let home = env::var("HOME").unwrap_or_default();
+        format!("{}/{}", home, p.trim_start_matches("~/"))
+    } else {
+        p
+    };
+    let path = std::path::Path::new(&expanded);
+    if path.is_absolute() {
+        return expanded;
+    }
+    env::current_dir()
+        .map(|d| d.join(path).to_string_lossy().into_owned())
+        .unwrap_or(expanded)
+}
 
 #[derive(Parser)]
 #[command(name = "sat-cli")]
@@ -15,7 +40,7 @@ enum Commands {
         #[command(subcommand)]
         subcommand: CrawlCommands,
     },
-    Docs,
+    Config,
     Doctor,
 }
 
@@ -61,6 +86,23 @@ async fn main() {
                 println!("  [!]  No credentials found in ~/sat-cli/config.json");
             }
 
+            if let LoginType::Fiel = config.credentials.login_type {
+                match config.credentials.crt_path.as_deref() {
+                    Some(p) if std::path::Path::new(p).exists() => {
+                        println!("  [ok] Certificate file exists: {}", p)
+                    }
+                    Some(p) => println!("  [!]  Certificate file not found: {}", p),
+                    None => println!("  [!]  FIEL login requires a certificate path (crt_path)"),
+                }
+                match config.credentials.key_path.as_deref() {
+                    Some(p) if std::path::Path::new(p).exists() => {
+                        println!("  [ok] Key file exists: {}", p)
+                    }
+                    Some(p) => println!("  [!]  Key file not found: {}", p),
+                    None => println!("  [!]  FIEL login requires a key path (key_path)"),
+                }
+            }
+
             match env::var("SATCLI_DOCUMENTS_FOLDER") {
                 Ok(path) => println!("  [ok] Custom documents folder: {}", path),
                 Err(_) => {
@@ -68,23 +110,43 @@ async fn main() {
                 }
             }
         }
-        Commands::Docs => {
-            println!("sat-cli — available commands:\n");
-            println!("  docs");
-            println!("      Lists all available commands.");
-            println!();
-            println!("  doctor");
-            println!("      Checks environment configuration and reports any issues.");
-            println!();
-            println!(
-                "  crawl validate-credentials [--username <USERNAME>] [--password <PASSWORD>]"
+        Commands::Config => {
+            println!("sat-cli config\n");
+
+            let login_type_input = prompt("Login type [ciec/fiel] (default: ciec): ");
+            let login_type = if login_type_input.eq_ignore_ascii_case("fiel") {
+                LoginType::Fiel
+            } else {
+                LoginType::Ciec
+            };
+
+            let username = prompt("RFC (username): ");
+            let password = rpassword::prompt_password("Password: ").unwrap();
+
+            let (crt_path, key_path) = match login_type {
+                LoginType::Fiel => {
+                    let crt = resolve_path(prompt("Certificate path (.cer): "));
+                    let key = resolve_path(prompt("Private key path (.key): "));
+                    (Some(crt), Some(key))
+                }
+                LoginType::Ciec => (None, None),
+            };
+
+            CrawlerConfig::new(
+                Credentials {
+                    login_type,
+                    username: username.clone(),
+                    password,
+                    crt_path,
+                    key_path,
+                },
+                CrawlerOptions {
+                    headless: true,
+                    sandbox: true,
+                },
             );
-            println!("      Validates SAT credentials by attempting a login.");
-            println!();
-            println!("  crawl download-invoices [--username <USERNAME>] [--password <PASSWORD>]");
-            println!("      Downloads all issued and received invoices from the SAT portal.");
-            println!();
-            println!("Credentials are read from ~/sat-cli/config.json when flags are omitted.");
+            println!("\nConfig saved to ~/sat-cli/config.json");
+            println!("  username: {}", username);
         }
         Commands::Crawl { subcommand } => match subcommand {
             CrawlCommands::ValidateCredentials { username, password } => {

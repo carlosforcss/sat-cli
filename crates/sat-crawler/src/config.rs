@@ -2,10 +2,20 @@ use dirs;
 use serde::{Deserialize, Serialize};
 use std::fs;
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum LoginType {
+    #[default]
+    Ciec,
+    Fiel,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Credentials {
+    pub login_type: LoginType,
     pub username: String,
     pub password: String,
+    pub crt_path: Option<String>,
+    pub key_path: Option<String>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -37,8 +47,11 @@ impl CrawlerConfigBuilder {
 
     pub fn with_credentials(mut self, username: String, password: String) -> Self {
         self.credentials = Some(Credentials {
-            username: username,
-            password: password,
+            login_type: LoginType::Ciec,
+            username,
+            password,
+            crt_path: None,
+            key_path: None,
         });
         self
     }
@@ -90,12 +103,8 @@ impl CrawlerConfig {
     pub fn update_configuration_file(&self) {
         let config_dir = dirs::home_dir().unwrap().join("sat-cli");
         let config_json = serde_json::to_string_pretty(&self).unwrap();
-        fs::create_dir_all(config_dir.to_str().unwrap()).unwrap();
-        fs::write(
-            format!("{}/config.json", config_dir.to_str().unwrap()),
-            config_json,
-        )
-        .unwrap();
+        fs::create_dir_all(&config_dir).unwrap();
+        fs::write(config_dir.join("config.json"), config_json).unwrap();
     }
 
     fn check_if_config_json_exists() -> bool {

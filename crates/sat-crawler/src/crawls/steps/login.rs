@@ -82,10 +82,97 @@ pub async fn try_to_login(
     )));
 }
 
+pub async fn try_to_login_with_fiel(
+    browser: &Browser,
+    crawler: &Crawler,
+) -> Result<Page, Box<dyn std::error::Error>> {
+    let crt_path = crawler
+        .config
+        .credentials
+        .crt_path
+        .as_deref()
+        .ok_or("FIEL login requires a certificate path")?;
+    let key_path = crawler
+        .config
+        .credentials
+        .key_path
+        .as_deref()
+        .ok_or("FIEL login requires a key path")?;
+
+    let page = browser.new_page(LOGIN_URL).await?;
+    page.wait_for_navigation().await?;
+
+    crawler.logger.info("Switching to FIEL login");
+    page.find_element("#buttonFiel").await?.click().await?;
+    page.wait_for_navigation().await?;
+
+    crawler.logger.info("Uploading certificate (.cer)");
+    let crt_input = page.find_element("#fileCertificate").await?;
+    page.execute(
+        chromiumoxide::cdp::browser_protocol::dom::SetFileInputFilesParams::builder()
+            .file(crt_path)
+            .backend_node_id(crt_input.backend_node_id)
+            .build()?,
+    )
+    .await?;
+    crawler.logger.info("Uploading private key (.key)");
+
+    let key_input = page.find_element("#filePrivateKey").await?;
+    page.execute(
+        chromiumoxide::cdp::browser_protocol::dom::SetFileInputFilesParams::builder()
+            .file(key_path)
+            .backend_node_id(key_input.backend_node_id)
+            .build()?,
+    )
+    .await?;
+
+    crawler.logger.info("Entering private key password");
+    let password_input = page.find_element("#privateKeyPassword").await?;
+    password_input.focus().await?;
+    password_input
+        .type_str(crawler.config.credentials.password.clone())
+        .await?;
+
+    crawler.logger.info("Submitting FIEL login");
+    page.find_element("#submit").await?.click().await?;
+    do_sleep(5).await;
+    page.wait_for_navigation().await?;
+
+    let page_url = page.url().await?.unwrap();
+    if page_url.contains("portalcfdi.facturaelectronica.sat.gob.mx") {
+        crawler.logger.info("FIEL login successful");
+        return Ok(page);
+    }
+
+    let err_message = match page.find_element("#divError").await {
+        Ok(el) => el
+            .inner_text()
+            .await
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| "Unknown error".to_string()),
+        Err(_) => "Unknown error".to_string(),
+    };
+    crawler
+        .logger
+        .info(&format!("FIEL login failed: {}", &err_message));
+    Err(Box::new(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        format!("FIEL login failed: {}", err_message),
+    )))
+}
+
 pub async fn login(
     browser: &Browser,
     crawler: &Crawler,
 ) -> Result<Page, Box<dyn std::error::Error>> {
     crawler.logger.info("Trying to login...");
-    retry(|| try_to_login(browser, crawler), 3, 500 as u64).await
+    match crawler.config.credentials.login_type {
+        crate::config::LoginType::Ciec => {
+            retry(|| try_to_login(browser, crawler), 3, 500 as u64).await
+        }
+        crate::config::LoginType::Fiel => {
+            retry(|| try_to_login_with_fiel(browser, crawler), 3, 500).await
+        }
+    }
 }
