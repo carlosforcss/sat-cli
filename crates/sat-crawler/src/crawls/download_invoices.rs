@@ -1,6 +1,6 @@
 use crate::constants::{ISSUED_AT_FORMAT, ISSUED_INVOICES_URL, RECEIVED_INVOICES_URL};
 use crate::crawls::steps::login::login;
-use crate::utils::{do_sleep, get_all_date_filters, get_download_folder, retry};
+use crate::utils::{apply_date_filter, do_sleep, get_all_date_filters, get_download_folder, retry};
 use crate::{Crawler, CrawlerResponse};
 use chromiumoxide::cdp::browser_protocol::browser::{
     SetDownloadBehaviorBehavior, SetDownloadBehaviorParams,
@@ -289,7 +289,7 @@ pub async fn download_current_page_invoices(
 async fn download_issued_invoices(crawler: &Crawler, page: &Page) -> Result<(), Box<dyn Error>> {
     crawler.logger.info("Downloading issued invoices");
     do_sleep(1).await;
-    let ranges = get_all_date_filters();
+    let ranges = apply_date_filter(get_all_date_filters(), &crawler.config.filters);
     for (range_start, range_end) in ranges {
         crawler.logger.info(&format!(
             "Processing date range: {} - {}",
@@ -350,24 +350,22 @@ async fn filter_by_year_month(
 async fn download_received_invoices(crawler: &Crawler, page: &Page) -> Result<(), Box<dyn Error>> {
     crawler.logger.info("Downloading received invoices");
     do_sleep(1).await;
-    let ranges = get_all_date_filters();
-    let now = chrono::Utc::now();
-    let current_year = chrono::Datelike::year(&now) as u32;
-    let current_month = chrono::Datelike::month(&now);
+    let ranges = apply_date_filter(get_all_date_filters(), &crawler.config.filters);
 
     page.wait_for_navigation().await?;
     do_sleep(1).await;
-    for (range_start, _) in ranges {
-        let year: u32 = range_start[6..10].parse()?;
-        let max_month = if year == current_year {
-            current_month
-        } else {
-            12
-        };
+    for (range_start, range_end) in ranges {
+        let start_parsed =
+            chrono::NaiveDate::parse_from_str(&range_start, crate::constants::MX_DATE_FORMAT)?;
+        let end_parsed =
+            chrono::NaiveDate::parse_from_str(&range_end, crate::constants::MX_DATE_FORMAT)?;
+        let year = start_parsed.year() as u32;
+        let start_month = start_parsed.month();
+        let end_month = end_parsed.month();
 
         page.goto(RECEIVED_INVOICES_URL).await?;
 
-        for month in 1..=max_month {
+        for month in start_month..=end_month {
             crawler
                 .logger
                 .info(&format!("Processing received invoices {}/{}", month, year));

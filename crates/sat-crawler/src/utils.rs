@@ -1,3 +1,4 @@
+use crate::config::CrawlerFilters;
 use crate::constants::{
     DEFAULT_DOCUMENTS_FOLDER, DOCUMENTS_ENV_VAR, FILTER_START_YEAR, MX_DATE_FORMAT,
 };
@@ -74,6 +75,46 @@ pub fn get_all_date_filters() -> Vec<(String, String)> {
         set_mx_date_format(range_end),
     ));
     filters
+}
+
+pub fn apply_date_filter(
+    ranges: Vec<(String, String)>,
+    filters: &CrawlerFilters,
+) -> Vec<(String, String)> {
+    let parse = |s: &str| chrono::NaiveDate::parse_from_str(s, MX_DATE_FORMAT).ok();
+
+    ranges
+        .into_iter()
+        .filter_map(|(start_str, end_str)| {
+            let range_start = parse(&start_str)?;
+            let range_end = parse(&end_str)?;
+
+            if let Some(filter_start) = filters.start_date {
+                if range_end < filter_start {
+                    return None;
+                }
+            }
+            if let Some(filter_end) = filters.end_date {
+                if range_start > filter_end {
+                    return None;
+                }
+            }
+
+            let effective_start = filters
+                .start_date
+                .map(|fs| fs.max(range_start))
+                .unwrap_or(range_start);
+            let effective_end = filters
+                .end_date
+                .map(|fe| fe.min(range_end))
+                .unwrap_or(range_end);
+
+            Some((
+                set_mx_date_format(effective_start),
+                set_mx_date_format(effective_end),
+            ))
+        })
+        .collect()
 }
 
 pub async fn retry<Fut, T, E, F>(mut f: F, max_retries: u32, mil_delay: u64) -> Result<T, E>

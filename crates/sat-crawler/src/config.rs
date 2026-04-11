@@ -24,10 +24,18 @@ pub struct CrawlerOptions {
     pub sandbox: bool,
 }
 
+#[derive(Debug, Default, Clone)]
+pub struct CrawlerFilters {
+    pub start_date: Option<chrono::NaiveDate>,
+    pub end_date: Option<chrono::NaiveDate>,
+}
+
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct CrawlerConfig {
     pub credentials: Credentials,
     pub options: CrawlerOptions,
+    #[serde(skip)]
+    pub filters: CrawlerFilters,
 }
 
 pub struct CrawlerConfigBuilder {
@@ -76,6 +84,7 @@ impl CrawlerConfigBuilder {
                 headless: self.headless,
                 sandbox: self.sandbox,
             },
+            filters: CrawlerFilters::default(),
         })
     }
 }
@@ -83,8 +92,9 @@ impl CrawlerConfigBuilder {
 impl CrawlerConfig {
     pub fn new(credentials: Credentials, opts: CrawlerOptions) -> Self {
         let instance = Self {
-            credentials: credentials,
+            credentials,
             options: opts,
+            filters: CrawlerFilters::default(),
         };
         instance.update_configuration_file();
         instance
