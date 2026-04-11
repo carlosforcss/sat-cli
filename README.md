@@ -42,9 +42,10 @@ Interactive prompt to save credentials (RFC, password, login type, FIEL certific
 ```bash
 sat-cli crawl validate-credentials
 sat-cli crawl validate-credentials --username RFCXXXX --password PASSXXXXX
-sat-cli crawl validate-credentials --login-type fiel --crt ~/certs/cert.cer --key ~/certs/key.key
+sat-cli crawl validate-credentials --username RFCXXXX --password PASSXXXXX --login-type fiel --crt ~/certs/cert.cer --key ~/certs/key.key
 ```
-Validates that the configured credentials can log in to the SAT portal.
+Validates that the configured credentials can log in to the SAT portal. Run `sat-cli config` first
+to save credentials — including FIEL certificate paths for FIEL login.
 
 ### crawl download-invoices
 ```bash

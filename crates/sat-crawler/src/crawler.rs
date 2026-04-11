@@ -34,6 +34,12 @@ impl Crawler {
     }
 
     pub async fn run(&self) -> CrawlerResponse {
+        if let Err(e) = self.config.validate() {
+            return CrawlerResponse {
+                success: false,
+                message: e,
+            };
+        }
         let response = match &self.crawler_type {
             CrawlerType::ValidateCredentials => {
                 crawls::run_validate_credentials_crawler(&self).await

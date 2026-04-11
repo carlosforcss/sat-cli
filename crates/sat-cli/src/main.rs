@@ -43,6 +43,32 @@ fn parse_login_type(s: &str) -> Result<LoginType, String> {
     }
 }
 
+fn validate_config_or_exit(config: &CrawlerConfig) {
+    if let Err(e) = config.validate() {
+        eprintln!("error: {}", e);
+        std::process::exit(1);
+    }
+}
+
+async fn run_crawl_command(
+    crawler_type: CrawlerType,
+    args: CrawlArgs,
+    filters: Option<CrawlerFilters>,
+) {
+    let mut config = CrawlerConfig::new_from_file();
+    apply_args_to_config(&mut config, args);
+    if let Some(f) = filters {
+        config.filters = f;
+    }
+    validate_config_or_exit(&config);
+    let crawler = Crawler::new(crawler_type, config);
+    let response = crawler.run().await;
+    println!(
+        "{}",
+        serde_json::to_string(&response).expect("Response serialization error")
+    );
+}
+
 fn apply_args_to_config(config: &mut CrawlerConfig, args: CrawlArgs) {
     if let Some(v) = args.username {
         config.credentials.username = v;
@@ -235,47 +261,26 @@ async fn main() {
         }
         Commands::Crawl { subcommand } => match subcommand {
             CrawlCommands::ValidateCredentials { args } => {
-                let mut config = CrawlerConfig::new_from_file();
-                apply_args_to_config(&mut config, args);
-                let crawler = Crawler::new(CrawlerType::ValidateCredentials, config);
-                let response = crawler.run().await;
-                println!(
-                    "{}",
-                    serde_json::to_string(&response).expect("Response serialization error")
-                );
+                run_crawl_command(CrawlerType::ValidateCredentials, args, None).await;
             }
             CrawlCommands::DownloadInvoices { args, filters } => {
-                let mut config = CrawlerConfig::new_from_file();
-                apply_args_to_config(&mut config, args);
-                config.filters = filters.into();
-                let crawler = Crawler::new(CrawlerType::DownloadInvoices, config);
-                let response = crawler.run().await;
-                println!(
-                    "{}",
-                    serde_json::to_string(&response).expect("Response serialization error")
-                );
+                run_crawl_command(CrawlerType::DownloadInvoices, args, Some(filters.into())).await;
             }
             CrawlCommands::DownloadIssuedInvoices { args, filters } => {
-                let mut config = CrawlerConfig::new_from_file();
-                apply_args_to_config(&mut config, args);
-                config.filters = filters.into();
-                let crawler = Crawler::new(CrawlerType::DownloadIssuedInvoices, config);
-                let response = crawler.run().await;
-                println!(
-                    "{}",
-                    serde_json::to_string(&response).expect("Response serialization error")
-                );
+                run_crawl_command(
+                    CrawlerType::DownloadIssuedInvoices,
+                    args,
+                    Some(filters.into()),
+                )
+                .await;
             }
             CrawlCommands::DownloadReceivedInvoices { args, filters } => {
-                let mut config = CrawlerConfig::new_from_file();
-                apply_args_to_config(&mut config, args);
-                config.filters = filters.into();
-                let crawler = Crawler::new(CrawlerType::DownloadReceivedInvoices, config);
-                let response = crawler.run().await;
-                println!(
-                    "{}",
-                    serde_json::to_string(&response).expect("Response serialization error")
-                );
+                run_crawl_command(
+                    CrawlerType::DownloadReceivedInvoices,
+                    args,
+                    Some(filters.into()),
+                )
+                .await;
             }
         },
     }

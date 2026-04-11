@@ -89,6 +89,16 @@ impl CrawlerConfigBuilder {
     }
 }
 
+fn validate_fiel_path(path: Option<&str>, label: &str) -> Result<(), String> {
+    match path {
+        None => Err(format!("FIEL login requires a {}", label)),
+        Some(p) if !std::path::Path::new(p).exists() => {
+            Err(format!("{} file not found: {}", label, p))
+        }
+        _ => Ok(()),
+    }
+}
+
 impl CrawlerConfig {
     pub fn new(credentials: Credentials, opts: CrawlerOptions) -> Self {
         let instance = Self {
@@ -115,6 +125,14 @@ impl CrawlerConfig {
         let config_json = serde_json::to_string_pretty(&self).unwrap();
         fs::create_dir_all(&config_dir).unwrap();
         fs::write(config_dir.join("config.json"), config_json).unwrap();
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if let LoginType::Fiel = self.credentials.login_type {
+            validate_fiel_path(self.credentials.crt_path.as_deref(), "certificate path")?;
+            validate_fiel_path(self.credentials.key_path.as_deref(), "key path")?;
+        }
+        Ok(())
     }
 
     fn check_if_config_json_exists() -> bool {
