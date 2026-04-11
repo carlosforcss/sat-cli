@@ -1,5 +1,8 @@
 use clap::{Parser, Subcommand};
-use satcrawler::{parse_date, Crawler, CrawlerConfig, CrawlerFilters, CrawlerOptions, Credentials, CrawlerType, LoginType};
+use satcrawler::{
+    parse_date, Crawler, CrawlerConfig, CrawlerFilters, CrawlerOptions, CrawlerType, Credentials,
+    LoginType,
+};
 use std::env;
 use std::io::{self, Write};
 
@@ -33,18 +36,35 @@ fn parse_login_type(s: &str) -> Result<LoginType, String> {
     } else if s.eq_ignore_ascii_case("fiel") {
         Ok(LoginType::Fiel)
     } else {
-        Err(format!("Invalid login type '{}': expected 'ciec' or 'fiel'", s))
+        Err(format!(
+            "Invalid login type '{}': expected 'ciec' or 'fiel'",
+            s
+        ))
     }
 }
 
 fn apply_args_to_config(config: &mut CrawlerConfig, args: CrawlArgs) {
-    if let Some(v) = args.username { config.credentials.username = v; }
-    if let Some(v) = args.password { config.credentials.password = v; }
-    if let Some(v) = args.crt { config.credentials.crt_path = Some(resolve_path(v)); }
-    if let Some(v) = args.key { config.credentials.key_path = Some(resolve_path(v)); }
-    if let Some(v) = args.login_type { config.credentials.login_type = v; }
-    if args.headless { config.options.headless = true; }
-    if args.sandbox { config.options.sandbox = true; }
+    if let Some(v) = args.username {
+        config.credentials.username = v;
+    }
+    if let Some(v) = args.password {
+        config.credentials.password = v;
+    }
+    if let Some(v) = args.crt {
+        config.credentials.crt_path = Some(resolve_path(v));
+    }
+    if let Some(v) = args.key {
+        config.credentials.key_path = Some(resolve_path(v));
+    }
+    if let Some(v) = args.login_type {
+        config.credentials.login_type = v;
+    }
+    if args.headless {
+        config.options.headless = true;
+    }
+    if args.sandbox {
+        config.options.sandbox = true;
+    }
 }
 
 #[derive(Parser)]
@@ -92,7 +112,10 @@ struct DownloadFilterArgs {
 
 impl From<DownloadFilterArgs> for CrawlerFilters {
     fn from(f: DownloadFilterArgs) -> Self {
-        CrawlerFilters { start_date: f.start_date, end_date: f.end_date }
+        CrawlerFilters {
+            start_date: f.start_date,
+            end_date: f.end_date,
+        }
     }
 }
 
@@ -103,6 +126,18 @@ enum CrawlCommands {
         args: CrawlArgs,
     },
     DownloadInvoices {
+        #[command(flatten)]
+        args: CrawlArgs,
+        #[command(flatten)]
+        filters: DownloadFilterArgs,
+    },
+    DownloadIssuedInvoices {
+        #[command(flatten)]
+        args: CrawlArgs,
+        #[command(flatten)]
+        filters: DownloadFilterArgs,
+    },
+    DownloadReceivedInvoices {
         #[command(flatten)]
         args: CrawlArgs,
         #[command(flatten)]
@@ -183,8 +218,17 @@ async fn main() {
             };
 
             CrawlerConfig::new(
-                Credentials { login_type, username: username.clone(), password, crt_path, key_path },
-                CrawlerOptions { headless: true, sandbox: true },
+                Credentials {
+                    login_type,
+                    username: username.clone(),
+                    password,
+                    crt_path,
+                    key_path,
+                },
+                CrawlerOptions {
+                    headless: true,
+                    sandbox: true,
+                },
             );
             println!("\nConfig saved to ~/sat-cli/config.json");
             println!("  username: {}", username);
@@ -205,6 +249,28 @@ async fn main() {
                 apply_args_to_config(&mut config, args);
                 config.filters = filters.into();
                 let crawler = Crawler::new(CrawlerType::DownloadInvoices, config);
+                let response = crawler.run().await;
+                println!(
+                    "{}",
+                    serde_json::to_string(&response).expect("Response serialization error")
+                );
+            }
+            CrawlCommands::DownloadIssuedInvoices { args, filters } => {
+                let mut config = CrawlerConfig::new_from_file();
+                apply_args_to_config(&mut config, args);
+                config.filters = filters.into();
+                let crawler = Crawler::new(CrawlerType::DownloadIssuedInvoices, config);
+                let response = crawler.run().await;
+                println!(
+                    "{}",
+                    serde_json::to_string(&response).expect("Response serialization error")
+                );
+            }
+            CrawlCommands::DownloadReceivedInvoices { args, filters } => {
+                let mut config = CrawlerConfig::new_from_file();
+                apply_args_to_config(&mut config, args);
+                config.filters = filters.into();
+                let crawler = Crawler::new(CrawlerType::DownloadReceivedInvoices, config);
                 let response = crawler.run().await;
                 println!(
                     "{}",

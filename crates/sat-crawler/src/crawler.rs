@@ -13,6 +13,8 @@ pub struct CrawlerResponse {
 
 pub enum CrawlerType {
     DownloadInvoices,
+    DownloadIssuedInvoices,
+    DownloadReceivedInvoices,
     ValidateCredentials,
 }
 
@@ -34,12 +36,14 @@ impl Crawler {
     pub async fn run(&self) -> CrawlerResponse {
         let response = match &self.crawler_type {
             CrawlerType::ValidateCredentials => {
-                let response = crawls::run_validate_credentials_crawler(&self).await;
-                response
+                crawls::run_validate_credentials_crawler(&self).await
             }
-            CrawlerType::DownloadInvoices => {
-                let response = crawls::run_download_invoices_crawler(&self).await;
-                response
+            CrawlerType::DownloadInvoices => crawls::run_download_invoices_crawler(&self).await,
+            CrawlerType::DownloadIssuedInvoices => {
+                crawls::run_download_issued_invoices_crawler(&self).await
+            }
+            CrawlerType::DownloadReceivedInvoices => {
+                crawls::run_download_received_invoices_crawler(&self).await
             }
         };
         match response {

@@ -78,8 +78,12 @@ pub fn get_all_date_filters() -> Vec<(String, String)> {
 }
 
 pub fn parse_date(s: &str) -> Result<chrono::NaiveDate, String> {
-    chrono::NaiveDate::parse_from_str(s, MX_DATE_FORMAT)
-        .map_err(|_| format!("Invalid date '{}': expected format dd/mm/YYYY (e.g. 01/01/2024)", s))
+    chrono::NaiveDate::parse_from_str(s, MX_DATE_FORMAT).map_err(|_| {
+        format!(
+            "Invalid date '{}': expected format dd/mm/YYYY (e.g. 01/01/2024)",
+            s
+        )
+    })
 }
 
 pub fn apply_date_filter(
