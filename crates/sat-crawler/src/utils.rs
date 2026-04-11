@@ -77,10 +77,15 @@ pub fn get_all_date_filters() -> Vec<(String, String)> {
     filters
 }
 
+pub fn parse_date(s: &str) -> Result<chrono::NaiveDate, String> {
+    chrono::NaiveDate::parse_from_str(s, MX_DATE_FORMAT)
+        .map_err(|_| format!("Invalid date '{}': expected format dd/mm/YYYY (e.g. 01/01/2024)", s))
+}
+
 pub fn apply_date_filter(
     ranges: Vec<(String, String)>,
     filters: &CrawlerFilters,
-) -> Vec<(String, String)> {
+) -> Vec<(chrono::NaiveDate, chrono::NaiveDate)> {
     let parse = |s: &str| chrono::NaiveDate::parse_from_str(s, MX_DATE_FORMAT).ok();
 
     ranges
@@ -88,17 +93,6 @@ pub fn apply_date_filter(
         .filter_map(|(start_str, end_str)| {
             let range_start = parse(&start_str)?;
             let range_end = parse(&end_str)?;
-
-            if let Some(filter_start) = filters.start_date {
-                if range_end < filter_start {
-                    return None;
-                }
-            }
-            if let Some(filter_end) = filters.end_date {
-                if range_start > filter_end {
-                    return None;
-                }
-            }
 
             let effective_start = filters
                 .start_date
@@ -109,10 +103,7 @@ pub fn apply_date_filter(
                 .map(|fe| fe.min(range_end))
                 .unwrap_or(range_end);
 
-            Some((
-                set_mx_date_format(effective_start),
-                set_mx_date_format(effective_end),
-            ))
+            (effective_start <= effective_end).then_some((effective_start, effective_end))
         })
         .collect()
 }

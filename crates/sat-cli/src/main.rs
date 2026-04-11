@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use satcrawler::{Crawler, CrawlerConfig, CrawlerFilters, CrawlerOptions, Credentials, CrawlerType, LoginType};
+use satcrawler::{parse_date, Crawler, CrawlerConfig, CrawlerFilters, CrawlerOptions, Credentials, CrawlerType, LoginType};
 use std::env;
 use std::io::{self, Write};
 
@@ -25,11 +25,6 @@ fn resolve_path(p: String) -> String {
     env::current_dir()
         .map(|d| d.join(path).to_string_lossy().into_owned())
         .unwrap_or(expanded)
-}
-
-fn parse_date(s: &str) -> Result<chrono::NaiveDate, String> {
-    chrono::NaiveDate::parse_from_str(s, "%d/%m/%Y")
-        .map_err(|_| format!("Invalid date '{}': expected format dd/mm/YYYY (e.g. 01/01/2024)", s))
 }
 
 fn parse_login_type(s: &str) -> Result<LoginType, String> {
@@ -93,6 +88,12 @@ struct DownloadFilterArgs {
     start_date: Option<chrono::NaiveDate>,
     #[arg(long, value_parser = parse_date, value_name = "dd/mm/YYYY")]
     end_date: Option<chrono::NaiveDate>,
+}
+
+impl From<DownloadFilterArgs> for CrawlerFilters {
+    fn from(f: DownloadFilterArgs) -> Self {
+        CrawlerFilters { start_date: f.start_date, end_date: f.end_date }
+    }
 }
 
 #[derive(Subcommand)]
@@ -202,7 +203,7 @@ async fn main() {
             CrawlCommands::DownloadInvoices { args, filters } => {
                 let mut config = CrawlerConfig::new_from_file();
                 apply_args_to_config(&mut config, args);
-                config.filters = CrawlerFilters { start_date: filters.start_date, end_date: filters.end_date };
+                config.filters = filters.into();
                 let crawler = Crawler::new(CrawlerType::DownloadInvoices, config);
                 let response = crawler.run().await;
                 println!(

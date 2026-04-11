@@ -1,6 +1,6 @@
 use crate::constants::{ISSUED_AT_FORMAT, ISSUED_INVOICES_URL, RECEIVED_INVOICES_URL};
 use crate::crawls::steps::login::login;
-use crate::utils::{apply_date_filter, do_sleep, get_all_date_filters, get_download_folder, retry};
+use crate::utils::{apply_date_filter, do_sleep, get_all_date_filters, get_download_folder, retry, set_mx_date_format};
 use crate::{Crawler, CrawlerResponse};
 use chromiumoxide::cdp::browser_protocol::browser::{
     SetDownloadBehaviorBehavior, SetDownloadBehaviorParams,
@@ -293,10 +293,10 @@ async fn download_issued_invoices(crawler: &Crawler, page: &Page) -> Result<(), 
     for (range_start, range_end) in ranges {
         crawler.logger.info(&format!(
             "Processing date range: {} - {}",
-            range_start, range_end
+            set_mx_date_format(range_start), set_mx_date_format(range_end)
         ));
         retry(
-            || filter_by_date(&crawler, &page, range_start.clone(), range_end.clone()),
+            || filter_by_date(&crawler, &page, set_mx_date_format(range_start), set_mx_date_format(range_end)),
             3,
             500,
         )
@@ -354,11 +354,7 @@ async fn download_received_invoices(crawler: &Crawler, page: &Page) -> Result<()
 
     page.wait_for_navigation().await?;
     do_sleep(1).await;
-    for (range_start, range_end) in ranges {
-        let start_parsed =
-            chrono::NaiveDate::parse_from_str(&range_start, crate::constants::MX_DATE_FORMAT)?;
-        let end_parsed =
-            chrono::NaiveDate::parse_from_str(&range_end, crate::constants::MX_DATE_FORMAT)?;
+    for (start_parsed, end_parsed) in ranges {
         let year = start_parsed.year() as u32;
         let start_month = start_parsed.month();
         let end_month = end_parsed.month();
