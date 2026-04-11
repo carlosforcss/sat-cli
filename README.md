@@ -1,9 +1,9 @@
 # SAT CLI
 Open Source project to crawl over the Mexican Tax Service.
 
-# WARNING
-This tool is in active development, so there's just a lot of things either not defined or not working
-completely, if you want to collaborate feel free to reach out or open a PR :)
+> [!WARNING]
+> This tool is in active development, so there's just a lot of things either not defined or not working
+> completely. If you want to collaborate feel free to reach out or open a PR :)
 
 ## Installation
 
