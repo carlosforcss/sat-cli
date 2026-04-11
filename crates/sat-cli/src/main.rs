@@ -51,13 +51,44 @@ enum CrawlCommands {
         username: Option<String>,
         #[arg(long)]
         password: Option<String>,
+        #[arg(long)]
+        crt: Option<String>,
+        #[arg(long)]
+        key: Option<String>,
+        #[arg(long, value_parser = parse_login_type)]
+        login_type: Option<LoginType>,
+        #[arg(long)]
+        headless: bool,
+        #[arg(long)]
+        sandbox: bool,
     },
     DownloadInvoices {
         #[arg(long)]
         username: Option<String>,
         #[arg(long)]
         password: Option<String>,
+        #[arg(long)]
+        crt: Option<String>,
+        #[arg(long)]
+        key: Option<String>,
+        #[arg(long, value_parser = parse_login_type)]
+        login_type: Option<LoginType>,
+        #[arg(long)]
+        headless: bool,
+        #[arg(long)]
+        sandbox: bool,
     },
+}
+
+fn parse_login_type(s: &str) -> Result<LoginType, String> {
+    match s.to_lowercase().as_str() {
+        "ciec" => Ok(LoginType::Ciec),
+        "fiel" => Ok(LoginType::Fiel),
+        _ => Err(format!(
+            "Invalid login type '{}': expected 'ciec' or 'fiel'",
+            s
+        )),
+    }
 }
 
 #[tokio::main]
@@ -149,13 +180,36 @@ async fn main() {
             println!("  username: {}", username);
         }
         Commands::Crawl { subcommand } => match subcommand {
-            CrawlCommands::ValidateCredentials { username, password } => {
+            CrawlCommands::ValidateCredentials {
+                username,
+                password,
+                crt,
+                key,
+                login_type,
+                headless,
+                sandbox,
+            } => {
                 let mut config = CrawlerConfig::new_from_file();
-                if let Some(custom_username) = username {
-                    config.credentials.username = custom_username;
+                if let Some(v) = username {
+                    config.credentials.username = v;
                 }
-                if let Some(custom_password) = password {
-                    config.credentials.password = custom_password;
+                if let Some(v) = password {
+                    config.credentials.password = v;
+                }
+                if let Some(v) = crt {
+                    config.credentials.crt_path = Some(resolve_path(v));
+                }
+                if let Some(v) = key {
+                    config.credentials.key_path = Some(resolve_path(v));
+                }
+                if let Some(v) = login_type {
+                    config.credentials.login_type = v;
+                }
+                if headless {
+                    config.options.headless = true;
+                }
+                if sandbox {
+                    config.options.sandbox = true;
                 }
                 let crawler = Crawler::new(CrawlerType::ValidateCredentials, config);
                 let response = crawler.run().await;
@@ -164,13 +218,36 @@ async fn main() {
                     serde_json::to_string(&response).expect("Response serialization error")
                 );
             }
-            CrawlCommands::DownloadInvoices { username, password } => {
+            CrawlCommands::DownloadInvoices {
+                username,
+                password,
+                crt,
+                key,
+                login_type,
+                headless,
+                sandbox,
+            } => {
                 let mut config = CrawlerConfig::new_from_file();
-                if let Some(custom_username) = username {
-                    config.credentials.username = custom_username;
+                if let Some(v) = username {
+                    config.credentials.username = v;
                 }
-                if let Some(custom_password) = password {
-                    config.credentials.password = custom_password;
+                if let Some(v) = password {
+                    config.credentials.password = v;
+                }
+                if let Some(v) = crt {
+                    config.credentials.crt_path = Some(resolve_path(v));
+                }
+                if let Some(v) = key {
+                    config.credentials.key_path = Some(resolve_path(v));
+                }
+                if let Some(v) = login_type {
+                    config.credentials.login_type = v;
+                }
+                if headless {
+                    config.options.headless = true;
+                }
+                if sandbox {
+                    config.options.sandbox = true;
                 }
                 let crawler = Crawler::new(CrawlerType::DownloadInvoices, config);
                 let response = crawler.run().await;
