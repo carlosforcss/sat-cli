@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use satcrawler::{Crawler, CrawlerConfig, CrawlerOptions, CrawlerType, Credentials, LoginType};
+use satcrawler::{Crawler, CrawlerConfig, CrawlerOptions, Credentials, CrawlerType, LoginType};
 use std::env;
 use std::io::{self, Write};
 
@@ -27,6 +27,26 @@ fn resolve_path(p: String) -> String {
         .unwrap_or(expanded)
 }
 
+fn parse_login_type(s: &str) -> Result<LoginType, String> {
+    if s.eq_ignore_ascii_case("ciec") {
+        Ok(LoginType::Ciec)
+    } else if s.eq_ignore_ascii_case("fiel") {
+        Ok(LoginType::Fiel)
+    } else {
+        Err(format!("Invalid login type '{}': expected 'ciec' or 'fiel'", s))
+    }
+}
+
+fn apply_args_to_config(config: &mut CrawlerConfig, args: CrawlArgs) {
+    if let Some(v) = args.username { config.credentials.username = v; }
+    if let Some(v) = args.password { config.credentials.password = v; }
+    if let Some(v) = args.crt { config.credentials.crt_path = Some(resolve_path(v)); }
+    if let Some(v) = args.key { config.credentials.key_path = Some(resolve_path(v)); }
+    if let Some(v) = args.login_type { config.credentials.login_type = v; }
+    if args.headless { config.options.headless = true; }
+    if args.sandbox { config.options.sandbox = true; }
+}
+
 #[derive(Parser)]
 #[command(name = "sat-cli")]
 struct Cli {
@@ -44,51 +64,34 @@ enum Commands {
     Doctor,
 }
 
+#[derive(Parser)]
+struct CrawlArgs {
+    #[arg(long)]
+    username: Option<String>,
+    #[arg(long)]
+    password: Option<String>,
+    #[arg(long)]
+    crt: Option<String>,
+    #[arg(long)]
+    key: Option<String>,
+    #[arg(long, value_parser = parse_login_type)]
+    login_type: Option<LoginType>,
+    #[arg(long)]
+    headless: bool,
+    #[arg(long)]
+    sandbox: bool,
+}
+
 #[derive(Subcommand)]
 enum CrawlCommands {
     ValidateCredentials {
-        #[arg(long)]
-        username: Option<String>,
-        #[arg(long)]
-        password: Option<String>,
-        #[arg(long)]
-        crt: Option<String>,
-        #[arg(long)]
-        key: Option<String>,
-        #[arg(long, value_parser = parse_login_type)]
-        login_type: Option<LoginType>,
-        #[arg(long)]
-        headless: bool,
-        #[arg(long)]
-        sandbox: bool,
+        #[command(flatten)]
+        args: CrawlArgs,
     },
     DownloadInvoices {
-        #[arg(long)]
-        username: Option<String>,
-        #[arg(long)]
-        password: Option<String>,
-        #[arg(long)]
-        crt: Option<String>,
-        #[arg(long)]
-        key: Option<String>,
-        #[arg(long, value_parser = parse_login_type)]
-        login_type: Option<LoginType>,
-        #[arg(long)]
-        headless: bool,
-        #[arg(long)]
-        sandbox: bool,
+        #[command(flatten)]
+        args: CrawlArgs,
     },
-}
-
-fn parse_login_type(s: &str) -> Result<LoginType, String> {
-    match s.to_lowercase().as_str() {
-        "ciec" => Ok(LoginType::Ciec),
-        "fiel" => Ok(LoginType::Fiel),
-        _ => Err(format!(
-            "Invalid login type '{}': expected 'ciec' or 'fiel'",
-            s
-        )),
-    }
 }
 
 #[tokio::main]
@@ -164,53 +167,16 @@ async fn main() {
             };
 
             CrawlerConfig::new(
-                Credentials {
-                    login_type,
-                    username: username.clone(),
-                    password,
-                    crt_path,
-                    key_path,
-                },
-                CrawlerOptions {
-                    headless: true,
-                    sandbox: true,
-                },
+                Credentials { login_type, username: username.clone(), password, crt_path, key_path },
+                CrawlerOptions { headless: true, sandbox: true },
             );
             println!("\nConfig saved to ~/sat-cli/config.json");
             println!("  username: {}", username);
         }
         Commands::Crawl { subcommand } => match subcommand {
-            CrawlCommands::ValidateCredentials {
-                username,
-                password,
-                crt,
-                key,
-                login_type,
-                headless,
-                sandbox,
-            } => {
+            CrawlCommands::ValidateCredentials { args } => {
                 let mut config = CrawlerConfig::new_from_file();
-                if let Some(v) = username {
-                    config.credentials.username = v;
-                }
-                if let Some(v) = password {
-                    config.credentials.password = v;
-                }
-                if let Some(v) = crt {
-                    config.credentials.crt_path = Some(resolve_path(v));
-                }
-                if let Some(v) = key {
-                    config.credentials.key_path = Some(resolve_path(v));
-                }
-                if let Some(v) = login_type {
-                    config.credentials.login_type = v;
-                }
-                if headless {
-                    config.options.headless = true;
-                }
-                if sandbox {
-                    config.options.sandbox = true;
-                }
+                apply_args_to_config(&mut config, args);
                 let crawler = Crawler::new(CrawlerType::ValidateCredentials, config);
                 let response = crawler.run().await;
                 println!(
@@ -218,37 +184,9 @@ async fn main() {
                     serde_json::to_string(&response).expect("Response serialization error")
                 );
             }
-            CrawlCommands::DownloadInvoices {
-                username,
-                password,
-                crt,
-                key,
-                login_type,
-                headless,
-                sandbox,
-            } => {
+            CrawlCommands::DownloadInvoices { args } => {
                 let mut config = CrawlerConfig::new_from_file();
-                if let Some(v) = username {
-                    config.credentials.username = v;
-                }
-                if let Some(v) = password {
-                    config.credentials.password = v;
-                }
-                if let Some(v) = crt {
-                    config.credentials.crt_path = Some(resolve_path(v));
-                }
-                if let Some(v) = key {
-                    config.credentials.key_path = Some(resolve_path(v));
-                }
-                if let Some(v) = login_type {
-                    config.credentials.login_type = v;
-                }
-                if headless {
-                    config.options.headless = true;
-                }
-                if sandbox {
-                    config.options.sandbox = true;
-                }
+                apply_args_to_config(&mut config, args);
                 let crawler = Crawler::new(CrawlerType::DownloadInvoices, config);
                 let response = crawler.run().await;
                 println!(
