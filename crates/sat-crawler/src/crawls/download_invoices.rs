@@ -1,5 +1,6 @@
 use crate::constants::{ISSUED_AT_FORMAT, ISSUED_INVOICES_URL, RECEIVED_INVOICES_URL};
 use crate::crawls::steps::login::login;
+use crate::events::{Invoice, InvoiceEvent};
 use crate::utils::{
     apply_date_filter, do_sleep, get_all_date_filters, get_download_folder, retry,
     set_mx_date_format,
@@ -145,25 +146,46 @@ async fn process_invoice_row(
     let total = cell_span_text(&cells[9]).await;
     let invoice_type = cell_span_text(&cells[10]).await;
     let invoice_status = cell_span_text(&cells[12]).await;
-    crawler.logger.info(&format!(
-        "Invoice {} | {} | {} | {} -> {} | {} | {} | {} | {} | {} | {}",
-        uuid,
+    let invoice = Invoice {
+        uuid: uuid.clone(),
         fiscal_id,
         issuer_tax_id,
         issuer_name,
         receiver_tax_id,
         receiver_name,
-        issued_at,
+        issued_at: issued_at.clone(),
         certified_at,
         total,
         invoice_type,
-        invoice_status
+        invoice_status,
+    };
+    crawler.logger.info(&format!(
+        "Invoice {} | {} | {} | {} -> {} | {} | {} | {} | {} | {} | {}",
+        invoice.uuid,
+        invoice.fiscal_id,
+        invoice.issuer_tax_id,
+        invoice.issuer_name,
+        invoice.receiver_tax_id,
+        invoice.receiver_name,
+        invoice.issued_at,
+        invoice.certified_at,
+        invoice.total,
+        invoice.invoice_type,
+        invoice.invoice_status
     ));
 
     if !should_download_invoice(&uuid, &issued_at, download_path) {
         crawler
             .logger
             .info(&format!("Skipping invoice {} (already exists)", uuid));
+        if let Some(handler) = &crawler.event_handler {
+            handler
+                .on_invoice_event(InvoiceEvent::Skipped {
+                    invoice,
+                    download_path: download_path.to_string(),
+                })
+                .await;
+        }
         return Ok(());
     }
 
@@ -190,6 +212,14 @@ async fn process_invoice_row(
     crawler
         .logger
         .info(&format!("Downloaded {} to {}", uuid, download_path));
+    if let Some(handler) = &crawler.event_handler {
+        handler
+            .on_invoice_event(InvoiceEvent::Downloaded {
+                invoice,
+                download_path: download_path.to_string(),
+            })
+            .await;
+    }
     Ok(())
 }
 
@@ -248,7 +278,7 @@ pub async fn download_current_page_invoices(
 async fn download_issued_invoices(crawler: &Crawler, page: &Page) -> Result<(), Box<dyn Error>> {
     crawler.logger.info("Downloading issued invoices");
     do_sleep(1).await;
-    let ranges = apply_date_filter(get_all_date_filters(), &crawler.config.filters);
+    let ranges = apply_date_filter(get_all_date_filters(), &crawler.filters);
     for (range_start, range_end) in ranges {
         crawler.logger.info(&format!(
             "Processing date range: {} - {}",
@@ -310,7 +340,7 @@ async fn filter_by_year_month(
 async fn download_received_invoices(crawler: &Crawler, page: &Page) -> Result<(), Box<dyn Error>> {
     crawler.logger.info("Downloading received invoices");
     do_sleep(1).await;
-    let ranges = apply_date_filter(get_all_date_filters(), &crawler.config.filters);
+    let ranges = apply_date_filter(get_all_date_filters(), &crawler.filters);
 
     page.wait_for_navigation().await?;
     do_sleep(1).await;

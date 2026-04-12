@@ -57,11 +57,8 @@ async fn run_crawl_command(
 ) {
     let mut config = CrawlerConfig::new_from_file();
     apply_args_to_config(&mut config, args);
-    if let Some(f) = filters {
-        config.filters = f;
-    }
     validate_config_or_exit(&config);
-    let crawler = Crawler::new(crawler_type, config);
+    let crawler = Crawler::new(crawler_type, config).with_filters(filters);
     let response = crawler.run().await;
     println!(
         "{}",

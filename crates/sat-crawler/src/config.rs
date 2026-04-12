@@ -34,8 +34,6 @@ pub struct CrawlerFilters {
 pub struct CrawlerConfig {
     pub credentials: Credentials,
     pub options: CrawlerOptions,
-    #[serde(skip)]
-    pub filters: CrawlerFilters,
 }
 
 pub struct CrawlerConfigBuilder {
@@ -84,7 +82,6 @@ impl CrawlerConfigBuilder {
                 headless: self.headless,
                 sandbox: self.sandbox,
             },
-            filters: CrawlerFilters::default(),
         })
     }
 }
@@ -104,7 +101,6 @@ impl CrawlerConfig {
         let instance = Self {
             credentials,
             options: opts,
-            filters: CrawlerFilters::default(),
         };
         instance.update_configuration_file();
         instance

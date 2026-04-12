@@ -1,5 +1,6 @@
-use crate::config::CrawlerConfig;
+use crate::config::{CrawlerConfig, CrawlerFilters};
 use crate::crawls;
+use crate::events::SharedInvoiceEventHandler;
 use crate::logger;
 use chromiumoxide::{Browser, BrowserConfig, Handler};
 use serde::{Deserialize, Serialize};
@@ -22,6 +23,8 @@ pub struct Crawler {
     pub crawler_type: CrawlerType,
     pub config: CrawlerConfig,
     pub logger: logger::Logger,
+    pub event_handler: Option<SharedInvoiceEventHandler>,
+    pub filters: CrawlerFilters,
 }
 
 impl Crawler {
@@ -30,7 +33,21 @@ impl Crawler {
             crawler_type: crawler_type,
             config: config,
             logger: logger::Logger::new(),
+            event_handler: None,
+            filters: CrawlerFilters::default(),
         }
+    }
+
+    pub fn with_event_handler(mut self, handler: SharedInvoiceEventHandler) -> Self {
+        self.event_handler = Some(handler);
+        self
+    }
+
+    pub fn with_filters(mut self, filters: Option<CrawlerFilters>) -> Self {
+        if let Some(f) = filters {
+            self.filters = f;
+        }
+        self
     }
 
     pub async fn run(&self) -> CrawlerResponse {
