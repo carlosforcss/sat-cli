@@ -12,3 +12,4 @@ cargo = "0.95.0"
 clap = { version = "=4.5.55", features = ["derive"] }
 rpassword = "7"
 chrono = "0.4"
+async-trait = "0.1"

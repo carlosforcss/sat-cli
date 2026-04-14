@@ -34,3 +34,10 @@ pub trait InvoiceEventHandler: Send + Sync {
 }
 
 pub type SharedInvoiceEventHandler = Arc<dyn InvoiceEventHandler>;
+
+#[async_trait]
+pub trait InvoiceDownloadDecider: Send + Sync {
+    async fn should_download_invoice(&self, invoice: &Invoice, download_path: &str) -> bool;
+}
+
+pub type SharedInvoiceDownloadDecider = Arc<dyn InvoiceDownloadDecider>;

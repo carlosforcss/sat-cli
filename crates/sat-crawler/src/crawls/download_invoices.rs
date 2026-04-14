@@ -1,4 +1,4 @@
-use crate::constants::{ISSUED_AT_FORMAT, ISSUED_INVOICES_URL, RECEIVED_INVOICES_URL};
+use crate::constants::{ISSUED_INVOICES_URL, RECEIVED_INVOICES_URL};
 use crate::crawls::steps::login::login;
 use crate::events::{Invoice, InvoiceEvent};
 use crate::utils::{
@@ -14,7 +14,6 @@ use chromiumoxide::Page;
 use chrono::Datelike;
 use futures::StreamExt;
 use std::error::Error;
-use std::path::Path;
 
 async fn set_date_field(
     page: &Page,
@@ -94,18 +93,6 @@ async fn filter_by_date(
     Ok(())
 }
 
-fn should_download_invoice(uuid: &str, issued_at: &str, download_path: &str) -> bool {
-    let xml = Path::new(download_path).join(format!("{}.xml", uuid));
-    let pdf = Path::new(download_path).join(format!("{}.pdf", uuid));
-    if !xml.exists() || !pdf.exists() {
-        return true;
-    }
-    let now = chrono::Utc::now();
-    chrono::NaiveDateTime::parse_from_str(issued_at, ISSUED_AT_FORMAT)
-        .map(|dt| dt.year() == now.year() && dt.month() == now.month())
-        .unwrap_or(false)
-}
-
 async fn process_invoice_row(
     crawler: &Crawler,
     row: Element,
@@ -174,7 +161,15 @@ async fn process_invoice_row(
         invoice.invoice_status
     ));
 
-    if !should_download_invoice(&uuid, &issued_at, download_path) {
+    let should_download = match &crawler.download_decider {
+        Some(decider) => {
+            decider
+                .should_download_invoice(&invoice, download_path)
+                .await
+        }
+        None => true,
+    };
+    if !should_download {
         crawler
             .logger
             .info(&format!("Skipping invoice {} (already exists)", uuid));

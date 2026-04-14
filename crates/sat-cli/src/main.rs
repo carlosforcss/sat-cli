@@ -1,10 +1,31 @@
+use async_trait::async_trait;
+use chrono::Datelike;
 use clap::{Parser, Subcommand};
 use satcrawler::{
-    parse_date, Crawler, CrawlerConfig, CrawlerFilters, CrawlerOptions, CrawlerType, Credentials,
-    LoginType,
+    constants::ISSUED_AT_FORMAT, parse_date, Crawler, CrawlerConfig, CrawlerFilters,
+    CrawlerOptions, CrawlerType, Credentials, Invoice, InvoiceDownloadDecider, LoginType,
 };
 use std::env;
 use std::io::{self, Write};
+use std::path::Path;
+use std::sync::Arc;
+
+struct DefaultDownloadDecider;
+
+#[async_trait]
+impl InvoiceDownloadDecider for DefaultDownloadDecider {
+    async fn should_download_invoice(&self, invoice: &Invoice, download_path: &str) -> bool {
+        let xml = Path::new(download_path).join(format!("{}.xml", invoice.uuid));
+        let pdf = Path::new(download_path).join(format!("{}.pdf", invoice.uuid));
+        if !xml.exists() || !pdf.exists() {
+            return true;
+        }
+        let now = chrono::Utc::now();
+        chrono::NaiveDateTime::parse_from_str(&invoice.issued_at, ISSUED_AT_FORMAT)
+            .map(|dt| dt.year() == now.year() && dt.month() == now.month())
+            .unwrap_or(false)
+    }
+}
 
 fn prompt(label: &str) -> String {
     print!("{}", label);
@@ -58,7 +79,9 @@ async fn run_crawl_command(
     let mut config = CrawlerConfig::new_from_file();
     apply_args_to_config(&mut config, args);
     validate_config_or_exit(&config);
-    let crawler = Crawler::new(crawler_type, config).with_filters(filters);
+    let crawler = Crawler::new(crawler_type, config)
+        .with_filters(filters)
+        .with_download_decider(Arc::new(DefaultDownloadDecider));
     let response = crawler.run().await;
     println!(
         "{}",
