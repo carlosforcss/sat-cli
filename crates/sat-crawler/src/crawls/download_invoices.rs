@@ -418,7 +418,6 @@ async fn download_issued_invoices(
     http_client: &reqwest::Client,
 ) -> Result<(), Box<dyn Error>> {
     crawler.logger.info("Downloading issued invoices");
-    do_sleep(1).await;
     validate_download(http_client).await?;
     let ranges = apply_date_filter(get_all_date_filters(), &crawler.filters);
     for (range_start, range_end) in ranges {
@@ -445,7 +444,6 @@ async fn download_issued_invoices(
             500,
         )
         .await?;
-        do_sleep(1).await;
     }
     Ok(())
 }
@@ -490,7 +488,6 @@ async fn download_received_invoices(
     http_client: &reqwest::Client,
 ) -> Result<(), Box<dyn Error>> {
     crawler.logger.info("Downloading received invoices");
-    do_sleep(1).await;
     validate_download(http_client).await?;
     let ranges = apply_date_filter(get_all_date_filters(), &crawler.filters);
 
@@ -534,9 +531,7 @@ async fn download_received_invoices(
                 }
             };
         }
-        do_sleep(10).await;
     }
-    do_sleep(10).await;
     Ok(())
 }
 
