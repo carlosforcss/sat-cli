@@ -7,7 +7,7 @@ Automates login and invoice retrieval from Mexico's SAT portal (`portalcfdi.fact
 ```rust
 use satcrawler::{
     Crawler, CrawlerConfig, CrawlerType, Credentials, CrawlerOptions, LoginType,
-    InvoiceEvent, InvoiceEventHandler, SharedInvoiceEventHandler,
+    Invoice, InvoiceEvent, InvoiceEventHandler, SharedInvoiceEventHandler,
 };
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -16,10 +16,16 @@ struct MyHandler;
 
 #[async_trait]
 impl InvoiceEventHandler for MyHandler {
+    async fn should_download(&self, invoice: &Invoice) -> bool {
+        true // download everything; override to skip already-processed invoices
+    }
+
     async fn on_invoice_event(&self, event: InvoiceEvent) {
         match event {
             InvoiceEvent::XmlDownloaded { invoice, content } => { /* save content */ }
             InvoiceEvent::PdfDownloaded { invoice, content } => { /* save content */ }
+            InvoiceEvent::XmlDownloadFailed { invoice, error } => { /* log or retry */ }
+            InvoiceEvent::PdfDownloadFailed { invoice, error } => { /* log or retry */ }
             InvoiceEvent::Skipped { invoice } => { /* already handled */ }
         }
     }
@@ -110,9 +116,8 @@ Crawler::new(CrawlerType::DownloadIssuedInvoices, config)
 
 ```rust
 Crawler::new(crawler_type, config)
-    .with_filters(Some(filters))        // optional
-    .with_event_handler(handler)        // optional — receives downloaded bytes
-    .with_download_decider(decider)     // optional — controls which invoices to skip
+    .with_filters(Some(filters))    // optional
+    .with_event_handler(handler)    // optional — receives events and controls skip logic
     .run()
     .await
 ```
@@ -139,14 +144,19 @@ pub struct CrawlerResponse {
 
 ## Handling invoice events
 
-Implement `InvoiceEventHandler` to receive file bytes as they are downloaded. This is the primary integration point — the crawler never writes files itself.
+Implement `InvoiceEventHandler` to control the full invoice lifecycle. This is the single integration point — the crawler never writes files itself.
 
 ```rust
 #[async_trait]
 pub trait InvoiceEventHandler: Send + Sync {
+    async fn should_download(&self, invoice: &Invoice) -> bool {
+        true // default: download everything
+    }
     async fn on_invoice_event(&self, event: InvoiceEvent);
 }
 ```
+
+`should_download` is called before any HTTP request is made. Return `false` to skip an invoice — a `Skipped` event will fire so the handler can log or track it.
 
 ### `InvoiceEvent`
 
@@ -154,12 +164,15 @@ pub trait InvoiceEventHandler: Send + Sync {
 pub enum InvoiceEvent {
     XmlDownloaded { invoice: Invoice, content: Vec<u8> },
     PdfDownloaded { invoice: Invoice, content: Vec<u8> },
+    XmlDownloadFailed { invoice: Invoice, error: String },
+    PdfDownloadFailed { invoice: Invoice, error: String },
     Skipped { invoice: Invoice },
 }
 ```
 
-- `XmlDownloaded` and `PdfDownloaded` fire independently and in parallel per invoice.
-- `Skipped` fires when the download decider returns `false` for an invoice.
+- `XmlDownloaded` and `PdfDownloaded` fire in parallel per invoice.
+- `XmlDownloadFailed` / `PdfDownloadFailed` fire when an HTTP error occurs or no download token was found in the page.
+- `Skipped` fires when `should_download` returns `false`.
 
 ### `Invoice`
 
@@ -179,40 +192,21 @@ pub enum InvoiceEvent {
 
 ---
 
-## Controlling which invoices are downloaded
+## Skipping already-downloaded invoices
 
-Implement `InvoiceDownloadDecider` to skip invoices that have already been processed or don't meet some condition.
+Override `should_download` on your handler to avoid re-downloading files that were already saved:
 
 ```rust
 #[async_trait]
-pub trait InvoiceDownloadDecider: Send + Sync {
-    async fn should_download_invoice(&self, invoice: &Invoice, download_path: &str) -> bool;
-}
-```
-
-Example — skip if both files already exist on disk:
-
-```rust
-struct SkipExisting;
-
-#[async_trait]
-impl InvoiceDownloadDecider for SkipExisting {
-    async fn should_download_invoice(&self, invoice: &Invoice, download_path: &str) -> bool {
-        let base = std::path::Path::new(download_path);
+impl InvoiceEventHandler for MyHandler {
+    async fn should_download(&self, invoice: &Invoice) -> bool {
+        let base = std::path::Path::new(&self.download_path);
         !base.join(format!("{}.xml", invoice.uuid)).exists()
             || !base.join(format!("{}.pdf", invoice.uuid)).exists()
     }
+
+    async fn on_invoice_event(&self, event: InvoiceEvent) { /* ... */ }
 }
-```
-
-Wire it up:
-
-```rust
-Crawler::new(CrawlerType::DownloadIssuedInvoices, config)
-    .with_download_decider(Arc::new(SkipExisting))
-    .with_event_handler(handler)
-    .run()
-    .await;
 ```
 
 ---

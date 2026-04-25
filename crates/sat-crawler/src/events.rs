@@ -20,19 +20,17 @@ pub struct Invoice {
 pub enum InvoiceEvent {
     XmlDownloaded { invoice: Invoice, content: Vec<u8> },
     PdfDownloaded { invoice: Invoice, content: Vec<u8> },
+    XmlDownloadFailed { invoice: Invoice, error: String },
+    PdfDownloadFailed { invoice: Invoice, error: String },
     Skipped { invoice: Invoice },
 }
 
 #[async_trait]
 pub trait InvoiceEventHandler: Send + Sync {
+    async fn should_download(&self, _invoice: &Invoice) -> bool {
+        true
+    }
     async fn on_invoice_event(&self, event: InvoiceEvent);
 }
 
 pub type SharedInvoiceEventHandler = Arc<dyn InvoiceEventHandler>;
-
-#[async_trait]
-pub trait InvoiceDownloadDecider: Send + Sync {
-    async fn should_download_invoice(&self, invoice: &Invoice, download_path: &str) -> bool;
-}
-
-pub type SharedInvoiceDownloadDecider = Arc<dyn InvoiceDownloadDecider>;

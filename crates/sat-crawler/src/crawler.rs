@@ -1,6 +1,6 @@
 use crate::config::{CrawlerConfig, CrawlerFilters};
 use crate::crawls;
-use crate::events::{SharedInvoiceDownloadDecider, SharedInvoiceEventHandler};
+use crate::events::SharedInvoiceEventHandler;
 use crate::logger;
 use chromiumoxide::{Browser, BrowserConfig, Handler};
 use serde::{Deserialize, Serialize};
@@ -24,7 +24,6 @@ pub struct Crawler {
     pub config: CrawlerConfig,
     pub logger: logger::Logger,
     pub event_handler: Option<SharedInvoiceEventHandler>,
-    pub download_decider: Option<SharedInvoiceDownloadDecider>,
     pub filters: CrawlerFilters,
 }
 
@@ -35,18 +34,12 @@ impl Crawler {
             config: config,
             logger: logger::Logger::new(),
             event_handler: None,
-            download_decider: None,
             filters: CrawlerFilters::default(),
         }
     }
 
     pub fn with_event_handler(mut self, handler: SharedInvoiceEventHandler) -> Self {
         self.event_handler = Some(handler);
-        self
-    }
-
-    pub fn with_download_decider(mut self, decider: SharedInvoiceDownloadDecider) -> Self {
-        self.download_decider = Some(decider);
         self
     }
 

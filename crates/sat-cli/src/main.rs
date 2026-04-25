@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use clap::{Parser, Subcommand};
 use satcrawler::{
     get_download_folder, parse_date, Crawler, CrawlerConfig, CrawlerFilters, CrawlerOptions,
-    CrawlerType, Credentials, InvoiceEvent, InvoiceEventHandler, LoginType,
+    CrawlerType, Credentials, Invoice, InvoiceEvent, InvoiceEventHandler, LoginType,
     SharedInvoiceEventHandler,
 };
 use std::env;
@@ -70,6 +70,13 @@ impl CliInvoiceHandler {
 
 #[async_trait]
 impl InvoiceEventHandler for CliInvoiceHandler {
+    async fn should_download(&self, invoice: &Invoice) -> bool {
+        let base = std::path::Path::new(&self.download_path);
+        let xml_exists = base.join(format!("{}.xml", invoice.uuid)).exists();
+        let pdf_exists = base.join(format!("{}.pdf", invoice.uuid)).exists();
+        !xml_exists || !pdf_exists
+    }
+
     async fn on_invoice_event(&self, event: InvoiceEvent) {
         match event {
             InvoiceEvent::XmlDownloaded { invoice, content } => {
@@ -77,6 +84,18 @@ impl InvoiceEventHandler for CliInvoiceHandler {
             }
             InvoiceEvent::PdfDownloaded { invoice, content } => {
                 self.save_file(&invoice.uuid, "pdf", &content);
+            }
+            InvoiceEvent::XmlDownloadFailed { invoice, error } => {
+                eprintln!(
+                    "[ERROR] XML download failed for {}: {}",
+                    invoice.uuid, error
+                );
+            }
+            InvoiceEvent::PdfDownloadFailed { invoice, error } => {
+                eprintln!(
+                    "[ERROR] PDF download failed for {}: {}",
+                    invoice.uuid, error
+                );
             }
             InvoiceEvent::Skipped { invoice } => {
                 eprintln!("[INFO] Skipped {} (already exists)", invoice.uuid);

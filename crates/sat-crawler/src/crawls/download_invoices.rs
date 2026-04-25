@@ -4,10 +4,7 @@ use crate::constants::{
 };
 use crate::crawls::steps::login::login;
 use crate::events::{Invoice, InvoiceEvent};
-use crate::utils::{
-    apply_date_filter, do_sleep, get_all_date_filters, get_download_folder, retry,
-    set_mx_date_format,
-};
+use crate::utils::{apply_date_filter, do_sleep, get_all_date_filters, retry, set_mx_date_format};
 use crate::{Crawler, CrawlerResponse};
 use chromiumoxide::cdp::browser_protocol::network::Cookie;
 use chromiumoxide::element::Element;
@@ -200,7 +197,6 @@ async fn process_invoice_row(
     crawler: &Crawler,
     row: Element,
     http_client: &reqwest::Client,
-    download_path: &str,
 ) -> Result<(), Box<dyn Error>> {
     let row_style = row
         .attribute("style")
@@ -265,18 +261,11 @@ async fn process_invoice_row(
         invoice.invoice_status
     ));
 
-    let should_download = match &crawler.download_decider {
-        Some(decider) => {
-            decider
-                .should_download_invoice(&invoice, download_path)
-                .await
-        }
+    let should_download = match &crawler.event_handler {
+        Some(handler) => handler.should_download(&invoice).await,
         None => true,
     };
     if !should_download {
-        crawler
-            .logger
-            .info(&format!("Skipping invoice {} (already exists)", uuid));
         if let Some(handler) = &crawler.event_handler {
             handler
                 .on_invoice_event(InvoiceEvent::Skipped { invoice })
@@ -319,42 +308,37 @@ async fn process_invoice_row(
         },
     );
 
-    match xml_result {
-        Some(Ok(content)) => {
-            if let Some(handler) = &crawler.event_handler {
-                handler
-                    .on_invoice_event(InvoiceEvent::XmlDownloaded {
-                        invoice: invoice.clone(),
-                        content,
-                    })
-                    .await;
-            }
-        }
-        Some(Err(e)) => crawler
-            .logger
-            .error(&format!("XML download failed for {}: {}", uuid, e)),
-        None => crawler
-            .logger
-            .error(&format!("No XML token found for {}", uuid)),
-    }
-
-    match pdf_result {
-        Some(Ok(content)) => {
-            if let Some(handler) = &crawler.event_handler {
-                handler
-                    .on_invoice_event(InvoiceEvent::PdfDownloaded {
-                        invoice: invoice.clone(),
-                        content,
-                    })
-                    .await;
-            }
-        }
-        Some(Err(e)) => crawler
-            .logger
-            .error(&format!("PDF download failed for {}: {}", uuid, e)),
-        None => crawler
-            .logger
-            .error(&format!("No PDF token found for {}", uuid)),
+    let xml_event = match xml_result {
+        Some(Ok(content)) => InvoiceEvent::XmlDownloaded {
+            invoice: invoice.clone(),
+            content,
+        },
+        Some(Err(e)) => InvoiceEvent::XmlDownloadFailed {
+            invoice: invoice.clone(),
+            error: e.to_string(),
+        },
+        None => InvoiceEvent::XmlDownloadFailed {
+            invoice: invoice.clone(),
+            error: "No XML token found".to_string(),
+        },
+    };
+    let pdf_event = match pdf_result {
+        Some(Ok(content)) => InvoiceEvent::PdfDownloaded {
+            invoice: invoice.clone(),
+            content,
+        },
+        Some(Err(e)) => InvoiceEvent::PdfDownloadFailed {
+            invoice: invoice.clone(),
+            error: e.to_string(),
+        },
+        None => InvoiceEvent::PdfDownloadFailed {
+            invoice: invoice.clone(),
+            error: "No PDF token found".to_string(),
+        },
+    };
+    if let Some(handler) = &crawler.event_handler {
+        handler.on_invoice_event(xml_event).await;
+        handler.on_invoice_event(pdf_event).await;
     }
 
     Ok(())
@@ -363,7 +347,6 @@ async fn process_invoice_row(
 pub async fn download_current_page_invoices(
     crawler: &Crawler,
     page: &Page,
-    http_client: &reqwest::Client,
 ) -> Result<(), Box<dyn Error>> {
     crawler
         .logger
@@ -380,17 +363,24 @@ pub async fn download_current_page_invoices(
     crawler
         .logger
         .info(&format!("Found {} pages with this filter", &num_pages));
-    let download_path = get_download_folder(Some(crawler.config.credentials.username.clone()));
     for page_num in 1..=num_pages {
         if num_pages > 1 {
             crawler.logger.info(&format!(
                 "Navigating to pagination page {}/{}",
                 page_num, num_pages
             ));
-            page.evaluate(format!("pager.showPage({})", page_num))
-                .await?;
-            do_sleep(1).await;
+            page.evaluate(format!(
+                "try {{ pager.showPage({}); }} catch(e) {{}}",
+                page_num
+            ))
+            .await?;
+            do_sleep(2).await;
         }
+
+        // Rebuild the HTTP client with the browser's current cookies before each
+        // batch of rows — the browser refreshes session tokens as it navigates,
+        // and the SAT portal will reject a stale reqwest session with 401 / TCP RST.
+        let http_client = build_http_client(page.get_cookies().await?)?;
 
         let invoice_rows = page
             .find_elements("#ctl00_MainContent_tblResult tbody tr")
@@ -402,7 +392,7 @@ pub async fn download_current_page_invoices(
         ));
 
         for row in invoice_rows.into_iter() {
-            if let Err(e) = process_invoice_row(crawler, row, http_client, &download_path).await {
+            if let Err(e) = process_invoice_row(crawler, row, &http_client).await {
                 crawler
                     .logger
                     .error(&format!("Failed to process invoice row: {}", e));
@@ -418,7 +408,11 @@ async fn download_issued_invoices(
     http_client: &reqwest::Client,
 ) -> Result<(), Box<dyn Error>> {
     crawler.logger.info("Downloading issued invoices");
-    validate_download(http_client).await?;
+    if let Err(e) = validate_download(http_client).await {
+        crawler
+            .logger
+            .error(&format!("validate_download failed: {}", e));
+    }
     let ranges = apply_date_filter(get_all_date_filters(), &crawler.filters);
     for (range_start, range_end) in ranges {
         crawler.logger.info(&format!(
@@ -438,12 +432,7 @@ async fn download_issued_invoices(
             500,
         )
         .await?;
-        retry(
-            || download_current_page_invoices(&crawler, &page, http_client),
-            3,
-            500,
-        )
-        .await?;
+        retry(|| download_current_page_invoices(&crawler, &page), 3, 500).await?;
     }
     Ok(())
 }
@@ -488,7 +477,11 @@ async fn download_received_invoices(
     http_client: &reqwest::Client,
 ) -> Result<(), Box<dyn Error>> {
     crawler.logger.info("Downloading received invoices");
-    validate_download(http_client).await?;
+    if let Err(e) = validate_download(http_client).await {
+        crawler
+            .logger
+            .error(&format!("validate_download failed: {}", e));
+    }
     let ranges = apply_date_filter(get_all_date_filters(), &crawler.filters);
 
     page.wait_for_navigation().await?;
@@ -514,13 +507,7 @@ async fn download_received_invoices(
                     continue;
                 }
             };
-            match retry(
-                || download_current_page_invoices(crawler, page, http_client),
-                3,
-                500,
-            )
-            .await
-            {
+            match retry(|| download_current_page_invoices(crawler, page), 3, 500).await {
                 Ok(_) => {}
                 Err(e) => {
                     crawler.logger.error(&format!(
