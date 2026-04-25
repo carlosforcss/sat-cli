@@ -1,31 +1,13 @@
 use async_trait::async_trait;
-use chrono::Datelike;
 use clap::{Parser, Subcommand};
 use satcrawler::{
-    constants::ISSUED_AT_FORMAT, parse_date, Crawler, CrawlerConfig, CrawlerFilters,
-    CrawlerOptions, CrawlerType, Credentials, Invoice, InvoiceDownloadDecider, LoginType,
+    get_download_folder, parse_date, Crawler, CrawlerConfig, CrawlerFilters, CrawlerOptions,
+    CrawlerType, Credentials, InvoiceEvent, InvoiceEventHandler, LoginType,
+    SharedInvoiceEventHandler,
 };
 use std::env;
 use std::io::{self, Write};
-use std::path::Path;
 use std::sync::Arc;
-
-struct DefaultDownloadDecider;
-
-#[async_trait]
-impl InvoiceDownloadDecider for DefaultDownloadDecider {
-    async fn should_download_invoice(&self, invoice: &Invoice, download_path: &str) -> bool {
-        let xml = Path::new(download_path).join(format!("{}.xml", invoice.uuid));
-        let pdf = Path::new(download_path).join(format!("{}.pdf", invoice.uuid));
-        if !xml.exists() || !pdf.exists() {
-            return true;
-        }
-        let now = chrono::Utc::now();
-        chrono::NaiveDateTime::parse_from_str(&invoice.issued_at, ISSUED_AT_FORMAT)
-            .map(|dt| dt.year() == now.year() && dt.month() == now.month())
-            .unwrap_or(false)
-    }
-}
 
 fn prompt(label: &str) -> String {
     print!("{}", label);
@@ -71,6 +53,38 @@ fn validate_config_or_exit(config: &CrawlerConfig) {
     }
 }
 
+struct CliInvoiceHandler {
+    download_path: String,
+}
+
+impl CliInvoiceHandler {
+    fn save_file(&self, uuid: &str, ext: &str, content: &[u8]) {
+        let dest = std::path::Path::new(&self.download_path).join(format!("{}.{}", uuid, ext));
+        if let Err(e) = std::fs::write(&dest, content) {
+            eprintln!("[ERROR] Failed to save {}.{}: {}", uuid, ext, e);
+        } else {
+            eprintln!("[INFO] Saved {}", dest.display());
+        }
+    }
+}
+
+#[async_trait]
+impl InvoiceEventHandler for CliInvoiceHandler {
+    async fn on_invoice_event(&self, event: InvoiceEvent) {
+        match event {
+            InvoiceEvent::XmlDownloaded { invoice, content } => {
+                self.save_file(&invoice.uuid, "xml", &content);
+            }
+            InvoiceEvent::PdfDownloaded { invoice, content } => {
+                self.save_file(&invoice.uuid, "pdf", &content);
+            }
+            InvoiceEvent::Skipped { invoice } => {
+                eprintln!("[INFO] Skipped {} (already exists)", invoice.uuid);
+            }
+        }
+    }
+}
+
 async fn run_crawl_command(
     crawler_type: CrawlerType,
     args: CrawlArgs,
@@ -79,9 +93,17 @@ async fn run_crawl_command(
     let mut config = CrawlerConfig::new_from_file();
     apply_args_to_config(&mut config, args);
     validate_config_or_exit(&config);
+    let download_path = get_download_folder(Some(config.credentials.username.clone()));
+    if let Err(e) = std::fs::create_dir_all(&download_path) {
+        eprintln!(
+            "[ERROR] Failed to create download directory {}: {}",
+            download_path, e
+        );
+    }
+    let handler: SharedInvoiceEventHandler = Arc::new(CliInvoiceHandler { download_path });
     let crawler = Crawler::new(crawler_type, config)
         .with_filters(filters)
-        .with_download_decider(Arc::new(DefaultDownloadDecider));
+        .with_event_handler(handler);
     let response = crawler.run().await;
     println!(
         "{}",

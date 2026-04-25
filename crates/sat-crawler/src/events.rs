@@ -18,14 +18,9 @@ pub struct Invoice {
 
 #[derive(Debug, Clone)]
 pub enum InvoiceEvent {
-    Downloaded {
-        invoice: Invoice,
-        download_path: String,
-    },
-    Skipped {
-        invoice: Invoice,
-        download_path: String,
-    },
+    XmlDownloaded { invoice: Invoice, content: Vec<u8> },
+    PdfDownloaded { invoice: Invoice, content: Vec<u8> },
+    Skipped { invoice: Invoice },
 }
 
 #[async_trait]

@@ -12,4 +12,4 @@ pub use crate::events::{
     Invoice, InvoiceDownloadDecider, InvoiceEvent, InvoiceEventHandler,
     SharedInvoiceDownloadDecider, SharedInvoiceEventHandler,
 };
-pub use crate::utils::parse_date;
+pub use crate::utils::{get_download_folder, parse_date};
