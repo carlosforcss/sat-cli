@@ -74,6 +74,7 @@ pub fn get_all_date_filters() -> Vec<(String, String)> {
         set_mx_date_format(chrono::NaiveDate::from_ymd_opt(range_end.year(), 1, 1).unwrap()),
         set_mx_date_format(range_end),
     ));
+    filters.reverse();
     filters
 }
 

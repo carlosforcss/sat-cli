@@ -493,7 +493,7 @@ async fn download_received_invoices(
 
         page.goto(RECEIVED_INVOICES_URL).await?;
 
-        for month in start_month..=end_month {
+        for month in (start_month..=end_month).rev() {
             crawler
                 .logger
                 .info(&format!("Processing received invoices {}/{}", month, year));
