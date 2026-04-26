@@ -415,24 +415,65 @@ async fn download_issued_invoices(
     }
     let ranges = apply_date_filter(get_all_date_filters(), &crawler.filters);
     for (range_start, range_end) in ranges {
-        crawler.logger.info(&format!(
-            "Processing date range: {} - {}",
-            set_mx_date_format(range_start),
-            set_mx_date_format(range_end)
-        ));
-        retry(
-            || {
-                filter_by_date(
-                    &page,
-                    set_mx_date_format(range_start),
-                    set_mx_date_format(range_end),
-                )
-            },
-            3,
-            500,
-        )
-        .await?;
-        retry(|| download_current_page_invoices(&crawler, &page), 3, 500).await?;
+        let year = range_start.year();
+        let start_month = range_start.month();
+        let end_month = range_end.month();
+
+        for month in (start_month..=end_month).rev() {
+            let month_start = if month == start_month {
+                range_start
+            } else {
+                chrono::NaiveDate::from_ymd_opt(year, month, 1).unwrap()
+            };
+            let month_end = if month == end_month {
+                range_end
+            } else {
+                chrono::NaiveDate::from_ymd_opt(year, month + 1, 1)
+                    .unwrap()
+                    .pred_opt()
+                    .unwrap()
+            };
+
+            crawler.logger.info(&format!(
+                "Processing issued invoices {}/{}: {} - {}",
+                month,
+                year,
+                set_mx_date_format(month_start),
+                set_mx_date_format(month_end)
+            ));
+            match retry(
+                || {
+                    filter_by_date(
+                        &page,
+                        set_mx_date_format(month_start),
+                        set_mx_date_format(month_end),
+                    )
+                },
+                3,
+                500,
+            )
+            .await
+            {
+                Ok(_) => {}
+                Err(e) => {
+                    crawler.logger.error(&format!(
+                        "Failed to filter issued invoices for {}/{}: {}",
+                        month, year, e
+                    ));
+                    continue;
+                }
+            }
+            match retry(|| download_current_page_invoices(&crawler, &page), 3, 500).await {
+                Ok(_) => {}
+                Err(e) => {
+                    crawler.logger.error(&format!(
+                        "Failed to download issued invoices for {}/{}: {}",
+                        month, year, e
+                    ));
+                    continue;
+                }
+            }
+        }
     }
     Ok(())
 }
