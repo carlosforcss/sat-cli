@@ -1,0 +1,11 @@
+[package]
+name = "sat-cfdi"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+quick-xml = { version = "0.37", features = ["serialize"] }
+chrono = { version = "0.4.44", features = ["serde"] }
+thiserror = "1"

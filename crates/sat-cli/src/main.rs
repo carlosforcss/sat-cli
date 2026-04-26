@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use clap::{Parser, Subcommand};
+use sat_cfdi;
 use satcrawler::{
     get_download_folder, parse_date, Crawler, CrawlerConfig, CrawlerFilters, CrawlerOptions,
     CrawlerType, Credentials, Invoice, InvoiceEvent, InvoiceEventHandler, LoginType,
@@ -167,6 +168,15 @@ enum Commands {
         #[command(subcommand)]
         subcommand: CrawlCommands,
     },
+    /// Parse a CFDI XML file or all XML files in a directory and output JSON.
+    /// A single file prints pretty JSON; a directory prints one compact JSON per line (NDJSON).
+    Parse {
+        /// Path to a .xml file or a directory containing .xml files.
+        path: String,
+        /// Output compact JSON instead of pretty-printed (always compact for directories).
+        #[arg(long)]
+        compact: bool,
+    },
     Config,
     Doctor,
 }
@@ -319,6 +329,49 @@ async fn main() {
             );
             println!("\nConfig saved to ~/sat-cli/config.json");
             println!("  username: {}", username);
+        }
+        Commands::Parse { path, compact } => {
+            let path = resolve_path(path);
+            let p = std::path::Path::new(&path);
+            if p.is_dir() {
+                let entries = std::fs::read_dir(p).unwrap_or_else(|e| {
+                    eprintln!("[ERROR] Cannot read directory {}: {}", path, e);
+                    std::process::exit(1);
+                });
+                for entry in entries.flatten() {
+                    let file_path = entry.path();
+                    if file_path.extension().and_then(|e| e.to_str()) != Some("xml") {
+                        continue;
+                    }
+                    let result = std::fs::read(&file_path)
+                        .map_err(|e| e.to_string())
+                        .and_then(|b| sat_cfdi::parse_bytes(&b).map_err(|e| e.to_string()))
+                        .and_then(|inv| serde_json::to_string(&inv).map_err(|e| e.to_string()));
+                    match result {
+                        Ok(json) => println!("{}", json),
+                        Err(e) => eprintln!("[ERROR] {}: {}", file_path.display(), e),
+                    }
+                }
+            } else {
+                let bytes = std::fs::read(&path).unwrap_or_else(|e| {
+                    eprintln!("[ERROR] Cannot read {}: {}", path, e);
+                    std::process::exit(1);
+                });
+                match sat_cfdi::parse_bytes(&bytes) {
+                    Err(e) => {
+                        eprintln!("[ERROR] {}", e);
+                        std::process::exit(1);
+                    }
+                    Ok(invoice) => {
+                        let json = if compact {
+                            serde_json::to_string(&invoice)
+                        } else {
+                            serde_json::to_string_pretty(&invoice)
+                        };
+                        println!("{}", json.expect("JSON serialization error"));
+                    }
+                }
+            }
         }
         Commands::Crawl { subcommand } => match subcommand {
             CrawlCommands::ValidateCredentials { args } => {
