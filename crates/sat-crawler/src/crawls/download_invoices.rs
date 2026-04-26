@@ -99,10 +99,24 @@ async fn download_xml(client: &reqwest::Client, token: &str) -> Result<Vec<u8>, 
         .send()
         .await?;
     let status = resp.status();
+    let is_html = resp
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|ct| ct.contains("text/html"))
+        .unwrap_or(false);
     let bytes = resp.bytes().await?;
     if !status.is_success() {
         let body = String::from_utf8_lossy(&bytes);
         return Err(format!("XML download HTTP {}: {}", status, body).into());
+    }
+    if is_html {
+        let preview = String::from_utf8_lossy(&bytes);
+        return Err(format!(
+            "XML download returned HTML error page: {}",
+            &preview[..preview.len().min(300)]
+        )
+        .into());
     }
     Ok(bytes.to_vec())
 }
