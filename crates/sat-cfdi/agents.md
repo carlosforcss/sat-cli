@@ -15,7 +15,7 @@ let invoice = parse_bytes(&bytes)?;
 
 // Access common fields
 println!("{}", invoice.total);                           // "12500.00"
-println!("{}", invoice.issuer.tax_id);                   // RFC
+println!("{}", invoice.issuer.taxpayer_id);              // RFC
 println!("{:?}", invoice.document_type);                 // DocumentType::Income
 println!("{:?}", invoice.fiscal_stamp_uuid());           // Some("uuid-...")
 ```
@@ -45,8 +45,8 @@ Top-level struct representing `cfdi:Comprobante`.
 |---|---|---|
 | `version` | `String` | `"3.3"` or `"4.0"` |
 | `series` | `Option<String>` | Invoice series |
-| `folio` | `Option<String>` | Invoice folio number |
-| `date` | `String` | Emission datetime, `"YYYY-MM-DDThh:mm:ss"` |
+| `fiscal_id` | `Option<String>` | Invoice folio number |
+| `issued_at` | `String` | Emission datetime, `"YYYY-MM-DDThh:mm:ss"` |
 | `seal` | `String` | Issuer digital seal |
 | `payment_form` | `Option<PaymentForm>` | How the invoice was paid |
 | `certificate_number` | `String` | Issuer certificate number |
@@ -207,7 +207,7 @@ Monetary amounts and dates are kept as `String` to avoid precision loss. Use the
 use sat_cfdi::{parse_cfdi_datetime, parse_cfdi_date};
 
 // "2024-01-15T12:00:00" → NaiveDateTime
-let dt = parse_cfdi_datetime(&invoice.date)?;
+let dt = parse_cfdi_datetime(&invoice.issued_at)?;
 
 // "2024-01-15" → NaiveDate
 let d = parse_cfdi_date("2024-01-15")?;

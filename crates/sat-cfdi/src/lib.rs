@@ -11,7 +11,7 @@ pub use catalogs::{
     PaymentForm, PaymentMethod, PaymentRegime, PayrollPeriodicity, RelationType, TaxFactor,
     TaxObject, TaxType,
 };
-pub use complement::{Complement, ComplementKind, FiscalStamp};
+pub use complement::Complement;
 pub use error::CfdiError;
 pub use freight::{
     Address, AirTransportShell, CustomsDoc, CustomsRegime, CustomsRegimes, FederalRoadTransport,

@@ -10,36 +10,37 @@ const NS_PAYROLL: &str = "http://www.sat.gob.mx/nomina12";
 const NS_FREIGHT: &str = "http://www.sat.gob.mx/CartaPorte31";
 const NS_FISCAL_STAMP: &str = "http://www.sat.gob.mx/TimbreFiscalDigital";
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FiscalStamp {
+#[derive(Debug, Clone, Deserialize)]
+struct FiscalStamp {
     #[serde(rename(deserialize = "@UUID"))]
-    pub uuid: String,
+    uuid: String,
     #[serde(rename(deserialize = "@FechaTimbrado"))]
-    pub stamp_date: String,
+    stamp_date: String,
     #[serde(rename(deserialize = "@NoCertificadoSAT"))]
-    pub sat_certificate_number: String,
+    sat_certificate_number: String,
     #[serde(rename(deserialize = "@SelloCFD"))]
-    pub cfdi_seal: String,
+    cfdi_seal: String,
     #[serde(rename(deserialize = "@SelloSAT"))]
-    pub sat_seal: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(tag = "type", content = "data")]
-pub enum ComplementKind {
-    Payments(PaymentsComplement),
-    Payroll(PayrollComplement),
-    FreightTransport(FreightTransportComplement),
-    FiscalStamp(FiscalStamp),
-    Unknown { namespace: String, raw_xml: String },
+    sat_seal: String,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct Complement {
-    pub items: Vec<ComplementKind>,
+    pub uuid: Option<String>,
+    pub stamp_date: Option<String>,
+    pub sat_certificate_number: Option<String>,
+    pub cfdi_seal: Option<String>,
+    pub sat_seal: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payroll: Option<PayrollComplement>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payments: Option<PaymentsComplement>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub freight_transport: Option<FreightTransportComplement>,
 }
 
-/// Parse the inner XML content of a `cfdi:Complemento` element into typed complement structs.
+/// Parse the inner XML content of a `cfdi:Complemento` element into a flat Complement struct.
 /// `inherited_ns` carries xmlns declarations from the outer document's root element so that
 /// namespace prefixes declared there (e.g. xmlns:nomina12) resolve correctly for complement
 /// elements that don't redeclare them.
@@ -67,8 +68,7 @@ pub fn parse_complement(inner_xml: &str, inherited_ns: &str) -> Result<Complemen
                     let ns_uri = bound_ns_uri(ns);
                     let ln = e.local_name();
                     let local = std::str::from_utf8(ln.as_ref()).unwrap_or("");
-                    let kind = dispatch_by_ns(&ns_uri, local, inner_xml);
-                    complement.items.push(kind);
+                    dispatch_into(&mut complement, &ns_uri, local, inner_xml);
                 }
             }
             Ok((ns, Event::Empty(ref e))) => {
@@ -76,8 +76,7 @@ pub fn parse_complement(inner_xml: &str, inherited_ns: &str) -> Result<Complemen
                     let ns_uri = bound_ns_uri(ns);
                     let ln = e.local_name();
                     let local = std::str::from_utf8(ln.as_ref()).unwrap_or("");
-                    let kind = dispatch_by_ns(&ns_uri, local, inner_xml);
-                    complement.items.push(kind);
+                    dispatch_into(&mut complement, &ns_uri, local, inner_xml);
                 }
             }
             Ok((_, Event::End(_))) => {
@@ -102,41 +101,34 @@ fn bound_ns_uri(ns: ResolveResult<'_>) -> String {
     }
 }
 
-fn dispatch_by_ns(ns_uri: &str, local: &str, inner_xml: &str) -> ComplementKind {
+fn dispatch_into(complement: &mut Complement, ns_uri: &str, local: &str, inner_xml: &str) {
     let elem_xml = capture_element(inner_xml, local);
     match ns_uri {
-        NS_PAYMENTS => match quick_xml::de::from_str::<PaymentsComplement>(&elem_xml) {
-            Ok(p) => ComplementKind::Payments(p),
-            Err(e) => ComplementKind::Unknown {
-                namespace: ns_uri.to_string(),
-                raw_xml: format!("parse error: {e}"),
-            },
-        },
-        NS_PAYROLL => match quick_xml::de::from_str::<PayrollComplement>(&elem_xml) {
-            Ok(p) => ComplementKind::Payroll(p),
-            Err(e) => ComplementKind::Unknown {
-                namespace: ns_uri.to_string(),
-                raw_xml: format!("parse error: {e}"),
-            },
-        },
-        NS_FREIGHT => match quick_xml::de::from_str::<FreightTransportComplement>(&elem_xml) {
-            Ok(f) => ComplementKind::FreightTransport(f),
-            Err(e) => ComplementKind::Unknown {
-                namespace: ns_uri.to_string(),
-                raw_xml: format!("parse error: {e}"),
-            },
-        },
-        NS_FISCAL_STAMP => match quick_xml::de::from_str::<FiscalStamp>(&elem_xml) {
-            Ok(s) => ComplementKind::FiscalStamp(s),
-            Err(e) => ComplementKind::Unknown {
-                namespace: ns_uri.to_string(),
-                raw_xml: format!("parse error: {e}"),
-            },
-        },
-        other => ComplementKind::Unknown {
-            namespace: other.to_string(),
-            raw_xml: elem_xml,
-        },
+        NS_FISCAL_STAMP => {
+            if let Ok(s) = quick_xml::de::from_str::<FiscalStamp>(&elem_xml) {
+                complement.uuid = Some(s.uuid);
+                complement.stamp_date = Some(s.stamp_date);
+                complement.sat_certificate_number = Some(s.sat_certificate_number);
+                complement.cfdi_seal = Some(s.cfdi_seal);
+                complement.sat_seal = Some(s.sat_seal);
+            }
+        }
+        NS_PAYROLL => {
+            if let Ok(p) = quick_xml::de::from_str::<PayrollComplement>(&elem_xml) {
+                complement.payroll = Some(p);
+            }
+        }
+        NS_PAYMENTS => {
+            if let Ok(p) = quick_xml::de::from_str::<PaymentsComplement>(&elem_xml) {
+                complement.payments = Some(p);
+            }
+        }
+        NS_FREIGHT => {
+            if let Ok(f) = quick_xml::de::from_str::<FreightTransportComplement>(&elem_xml) {
+                complement.freight_transport = Some(f);
+            }
+        }
+        _ => {}
     }
 }
 

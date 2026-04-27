@@ -2,7 +2,7 @@ use crate::catalogs::{
     CfdiUse, Currency, DocumentType, ExportType, FiscalRegime, InvoicePeriodicity, PaymentForm,
     PaymentMethod, RelationType, TaxFactor, TaxObject, TaxType,
 };
-use crate::complement::{Complement, ComplementKind};
+use crate::complement::Complement;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -12,9 +12,9 @@ pub struct Invoice {
     #[serde(rename(deserialize = "@Serie"), default)]
     pub series: Option<String>,
     #[serde(rename(deserialize = "@Folio"), default)]
-    pub folio: Option<String>,
+    pub fiscal_id: Option<String>,
     #[serde(rename(deserialize = "@Fecha"))]
-    pub date: String,
+    pub issued_at: String,
     #[serde(rename(deserialize = "@Sello"))]
     pub seal: String,
     #[serde(rename(deserialize = "@FormaPago"), default)]
@@ -70,43 +70,19 @@ impl Invoice {
     }
 
     pub fn payments(&self) -> Option<&crate::payment::PaymentsComplement> {
-        self.complement.as_ref()?.items.iter().find_map(|k| {
-            if let ComplementKind::Payments(p) = k {
-                Some(p)
-            } else {
-                None
-            }
-        })
+        self.complement.as_ref()?.payments.as_ref()
     }
 
     pub fn payroll(&self) -> Option<&crate::payroll::PayrollComplement> {
-        self.complement.as_ref()?.items.iter().find_map(|k| {
-            if let ComplementKind::Payroll(p) = k {
-                Some(p)
-            } else {
-                None
-            }
-        })
+        self.complement.as_ref()?.payroll.as_ref()
     }
 
     pub fn freight_transport(&self) -> Option<&crate::freight::FreightTransportComplement> {
-        self.complement.as_ref()?.items.iter().find_map(|k| {
-            if let ComplementKind::FreightTransport(f) = k {
-                Some(f)
-            } else {
-                None
-            }
-        })
+        self.complement.as_ref()?.freight_transport.as_ref()
     }
 
     pub fn fiscal_stamp_uuid(&self) -> Option<&str> {
-        self.complement.as_ref()?.items.iter().find_map(|k| {
-            if let ComplementKind::FiscalStamp(s) = k {
-                Some(s.uuid.as_str())
-            } else {
-                None
-            }
-        })
+        self.complement.as_ref()?.uuid.as_deref()
     }
 }
 
@@ -137,7 +113,7 @@ pub struct RelatedCfdi {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Issuer {
     #[serde(rename(deserialize = "@Rfc"))]
-    pub tax_id: String,
+    pub taxpayer_id: String,
     #[serde(rename(deserialize = "@Nombre"), default)]
     pub name: Option<String>,
     #[serde(rename(deserialize = "@RegimenFiscal"))]
@@ -149,7 +125,7 @@ pub struct Issuer {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Recipient {
     #[serde(rename(deserialize = "@Rfc"))]
-    pub tax_id: String,
+    pub taxpayer_id: String,
     #[serde(rename(deserialize = "@Nombre"), default)]
     pub name: Option<String>,
     #[serde(rename(deserialize = "@DomicilioFiscalReceptor"), default)]
@@ -164,10 +140,16 @@ pub struct Recipient {
     pub cfdi_use: CfdiUse,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct LineItems {
     #[serde(rename(deserialize = "Concepto"), default)]
     pub items: Vec<LineItem>,
+}
+
+impl Serialize for LineItems {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.items.serialize(s)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -298,7 +280,7 @@ pub struct Withholding {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThirdParty {
     #[serde(rename(deserialize = "@RfcACuentaTerceros"))]
-    pub tax_id: String,
+    pub taxpayer_id: String,
     #[serde(rename(deserialize = "@NombreACuentaTerceros"), default)]
     pub name: Option<String>,
     #[serde(rename(deserialize = "@RegimenFiscalACuentaTerceros"))]

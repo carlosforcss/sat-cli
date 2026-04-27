@@ -357,7 +357,7 @@ pub struct TransportFigure {
     #[serde(rename(deserialize = "@TipoFigura"))]
     pub figure_type: String,
     #[serde(rename(deserialize = "@RFCFigura"), default)]
-    pub tax_id: Option<String>,
+    pub taxpayer_id: Option<String>,
     #[serde(rename(deserialize = "@NumLicencia"), default)]
     pub license_number: Option<String>,
     #[serde(rename(deserialize = "@NombreFigura"), default)]

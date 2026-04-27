@@ -83,7 +83,7 @@ pub struct RelatedDocument {
     #[serde(rename(deserialize = "@Serie"), default)]
     pub series: Option<String>,
     #[serde(rename(deserialize = "@Folio"), default)]
-    pub folio: Option<String>,
+    pub fiscal_id: Option<String>,
     #[serde(rename(deserialize = "@MonedaDR"))]
     pub document_currency: Currency,
     #[serde(rename(deserialize = "@EquivalenciaDR"), default)]
