@@ -50,16 +50,50 @@ pub fn parse(xml: &str) -> Result<Invoice, CfdiError> {
 
     // Pre-extract the Complemento inner XML before serde sees the document.
     // quick-xml serde cannot handle xs:any children; we pull them out manually.
+    let ns_decls = root_ns_decls(xml);
     let (xml_without_complement, complement_inner) = split_complement(xml);
 
     let mut doc: Invoice = quick_xml::de::from_str(&xml_without_complement)?;
 
     if let Some(inner) = complement_inner {
-        if let Ok(c) = complement::parse_complement(&inner) {
+        if let Ok(c) = complement::parse_complement(&inner, &ns_decls) {
             doc.complement = Some(c);
         }
     }
     Ok(doc)
+}
+
+/// Extract all xmlns:* declarations from the root element of the XML document.
+/// These are passed to parse_complement so inherited namespace prefixes (e.g.
+/// xmlns:nomina12 declared on cfdi:Comprobante, not on the complement element)
+/// are resolved correctly.
+fn root_ns_decls(xml: &str) -> String {
+    use quick_xml::events::Event;
+    use quick_xml::Reader;
+
+    let mut reader = Reader::from_str(xml);
+    reader.config_mut().trim_text(true);
+    let mut buf = Vec::new();
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) => {
+                let mut decls = String::new();
+                for attr in e.attributes().flatten() {
+                    let key = std::str::from_utf8(attr.key.as_ref()).unwrap_or("");
+                    if key.starts_with("xmlns") {
+                        let val = std::str::from_utf8(attr.value.as_ref()).unwrap_or("");
+                        decls.push_str(&format!(" {}=\"{}\"", key, val));
+                    }
+                }
+                return decls;
+            }
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    String::new()
 }
 
 /// Parse a CFDI XML document from raw bytes (must be UTF-8).

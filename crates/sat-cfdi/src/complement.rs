@@ -2,6 +2,7 @@ use crate::error::CfdiError;
 use crate::freight::FreightTransportComplement;
 use crate::payment::PaymentsComplement;
 use crate::payroll::PayrollComplement;
+use quick_xml::name::ResolveResult;
 use serde::{Deserialize, Serialize};
 
 const NS_PAYMENTS: &str = "http://www.sat.gob.mx/Pagos20";
@@ -39,43 +40,52 @@ pub struct Complement {
 }
 
 /// Parse the inner XML content of a `cfdi:Complemento` element into typed complement structs.
-pub fn parse_complement(inner_xml: &str) -> Result<Complement, CfdiError> {
+/// `inherited_ns` carries xmlns declarations from the outer document's root element so that
+/// namespace prefixes declared there (e.g. xmlns:nomina12) resolve correctly for complement
+/// elements that don't redeclare them.
+pub fn parse_complement(inner_xml: &str, inherited_ns: &str) -> Result<Complement, CfdiError> {
     use quick_xml::events::Event;
-    use quick_xml::Reader;
+    use quick_xml::NsReader;
 
     if inner_xml.trim().is_empty() {
         return Ok(Complement::default());
     }
 
     let mut complement = Complement::default();
-    let wrapped = format!("<root>{}</root>", inner_xml);
-    let mut reader = Reader::from_str(&wrapped);
+    let wrapped = format!("<root {}>{}</root>", inherited_ns, inner_xml);
+    let mut reader = NsReader::from_str(&wrapped);
     reader.config_mut().trim_text(true);
 
     let mut buf = Vec::new();
     let mut depth = 0u32;
 
     loop {
-        match reader.read_event_into(&mut buf) {
-            Ok(Event::Start(ref e)) => {
+        match reader.read_resolved_event_into(&mut buf) {
+            Ok((ns, Event::Start(ref e))) => {
                 depth += 1;
                 if depth == 2 {
-                    let kind = dispatch_complement_element(e, inner_xml);
+                    let ns_uri = bound_ns_uri(ns);
+                    let ln = e.local_name();
+                    let local = std::str::from_utf8(ln.as_ref()).unwrap_or("");
+                    let kind = dispatch_by_ns(&ns_uri, local, inner_xml);
                     complement.items.push(kind);
                 }
             }
-            Ok(Event::Empty(ref e)) => {
+            Ok((ns, Event::Empty(ref e))) => {
                 if depth == 1 {
-                    let kind = dispatch_complement_element(e, inner_xml);
+                    let ns_uri = bound_ns_uri(ns);
+                    let ln = e.local_name();
+                    let local = std::str::from_utf8(ln.as_ref()).unwrap_or("");
+                    let kind = dispatch_by_ns(&ns_uri, local, inner_xml);
                     complement.items.push(kind);
                 }
             }
-            Ok(Event::End(_)) => {
+            Ok((_, Event::End(_))) => {
                 if depth > 0 {
                     depth -= 1;
                 }
             }
-            Ok(Event::Eof) => break,
+            Ok((_, Event::Eof)) => break,
             Err(_) => break,
             _ => {}
         }
@@ -85,41 +95,41 @@ pub fn parse_complement(inner_xml: &str) -> Result<Complement, CfdiError> {
     Ok(complement)
 }
 
-fn dispatch_complement_element(
-    e: &quick_xml::events::BytesStart,
-    inner_xml: &str,
-) -> ComplementKind {
-    let local_name = e.local_name();
-    let local = std::str::from_utf8(local_name.as_ref()).unwrap_or("");
-    let ns_uri = element_namespace(e);
-    let elem_xml = capture_element(inner_xml, local);
+fn bound_ns_uri(ns: ResolveResult<'_>) -> String {
+    match ns {
+        ResolveResult::Bound(n) => std::str::from_utf8(n.as_ref()).unwrap_or("").to_string(),
+        _ => String::new(),
+    }
+}
 
-    match ns_uri.as_str() {
+fn dispatch_by_ns(ns_uri: &str, local: &str, inner_xml: &str) -> ComplementKind {
+    let elem_xml = capture_element(inner_xml, local);
+    match ns_uri {
         NS_PAYMENTS => match quick_xml::de::from_str::<PaymentsComplement>(&elem_xml) {
             Ok(p) => ComplementKind::Payments(p),
             Err(e) => ComplementKind::Unknown {
-                namespace: ns_uri,
+                namespace: ns_uri.to_string(),
                 raw_xml: format!("parse error: {e}"),
             },
         },
         NS_PAYROLL => match quick_xml::de::from_str::<PayrollComplement>(&elem_xml) {
             Ok(p) => ComplementKind::Payroll(p),
             Err(e) => ComplementKind::Unknown {
-                namespace: ns_uri,
+                namespace: ns_uri.to_string(),
                 raw_xml: format!("parse error: {e}"),
             },
         },
         NS_FREIGHT => match quick_xml::de::from_str::<FreightTransportComplement>(&elem_xml) {
             Ok(f) => ComplementKind::FreightTransport(f),
             Err(e) => ComplementKind::Unknown {
-                namespace: ns_uri,
+                namespace: ns_uri.to_string(),
                 raw_xml: format!("parse error: {e}"),
             },
         },
         NS_FISCAL_STAMP => match quick_xml::de::from_str::<FiscalStamp>(&elem_xml) {
             Ok(s) => ComplementKind::FiscalStamp(s),
             Err(e) => ComplementKind::Unknown {
-                namespace: ns_uri,
+                namespace: ns_uri.to_string(),
                 raw_xml: format!("parse error: {e}"),
             },
         },
@@ -128,28 +138,6 @@ fn dispatch_complement_element(
             raw_xml: elem_xml,
         },
     }
-}
-
-/// Resolve the namespace URI for an element using its prefix and inline xmlns declarations.
-fn element_namespace(e: &quick_xml::events::BytesStart) -> String {
-    let name = e.name();
-    let full_name = std::str::from_utf8(name.as_ref()).unwrap_or("");
-    let prefix = full_name.find(':').map(|i| &full_name[..i]).unwrap_or("");
-    let xmlns_key = if prefix.is_empty() {
-        "xmlns".to_string()
-    } else {
-        format!("xmlns:{prefix}")
-    };
-
-    for attr in e.attributes().flatten() {
-        let key = std::str::from_utf8(attr.key.as_ref()).unwrap_or("");
-        if key == xmlns_key {
-            if let Ok(val) = std::str::from_utf8(attr.value.as_ref()) {
-                return val.to_string();
-            }
-        }
-    }
-    String::new()
 }
 
 fn capture_element(xml: &str, local_name: &str) -> String {
