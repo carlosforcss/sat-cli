@@ -24,6 +24,8 @@ pub const RECOVER_RI_URL: &str =
     "https://portalcfdi.facturaelectronica.sat.gob.mx/RepresentacionImpresa.aspx";
 
 pub const CSF_LOGIN_URL: &str = "https://login.siat.sat.gob.mx/nidp/app/login";
+pub const CSF_FIEL_LOGIN_URL: &str =
+    "https://login.siat.sat.gob.mx/nidp/idff/sso?id=fiel&sid=0&option=credential&sid=0";
 pub const CSF_SSO_ENTRY_URL: &str = "https://wwwmat.sat.gob.mx/app/seg/faces/pages/lanzador.jsf\
      ?url=/operacion/53027/genera-tu-constancia-de-situacion-fiscal\
      &tipoLogeo=c&target=principal&hostServer=https://wwwmat.sat.gob.mx";
