@@ -34,3 +34,16 @@ pub trait InvoiceEventHandler: Send + Sync {
 }
 
 pub type SharedInvoiceEventHandler = Arc<dyn InvoiceEventHandler>;
+
+#[derive(Debug, Clone)]
+pub enum CsfEvent {
+    PdfDownloaded { content: Vec<u8> },
+    PdfDownloadFailed { error: String },
+}
+
+#[async_trait]
+pub trait CsfEventHandler: Send + Sync {
+    async fn on_csf_event(&self, event: CsfEvent);
+}
+
+pub type SharedCsfEventHandler = Arc<dyn CsfEventHandler>;

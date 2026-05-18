@@ -1,6 +1,8 @@
+pub mod download_csf;
 pub mod download_invoices;
 mod steps;
 pub mod validate_credentials;
+pub use download_csf::run_download_csf_crawler;
 pub use download_invoices::{
     run_download_invoices_crawler, run_download_issued_invoices_crawler,
     run_download_received_invoices_crawler,

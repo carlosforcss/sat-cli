@@ -4,9 +4,10 @@ use crate::constants::{
 };
 use crate::crawls::steps::login::login;
 use crate::events::{Invoice, InvoiceEvent};
-use crate::utils::{apply_date_filter, do_sleep, get_all_date_filters, retry, set_mx_date_format};
+use crate::utils::{
+    apply_date_filter, build_http_client, do_sleep, get_all_date_filters, retry, set_mx_date_format,
+};
 use crate::{Crawler, CrawlerResponse};
-use chromiumoxide::cdp::browser_protocol::network::Cookie;
 use chromiumoxide::element::Element;
 use chromiumoxide::Page;
 use chrono::Datelike;
@@ -50,33 +51,6 @@ fn extract_pdf_token(onclick: &str) -> Option<String> {
     let start = onclick.find('\'')? + 1;
     let rest = &onclick[start..];
     Some(rest[..rest.find('\'')?].to_string())
-}
-
-fn build_http_client(cookies: Vec<Cookie>) -> Result<reqwest::Client, Box<dyn Error>> {
-    let cookie_header = cookies
-        .iter()
-        .map(|c| format!("{}={}", c.name, c.value))
-        .collect::<Vec<_>>()
-        .join("; ");
-
-    let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert(
-        reqwest::header::COOKIE,
-        reqwest::header::HeaderValue::from_str(&cookie_header)?,
-    );
-    headers.insert(
-        reqwest::header::USER_AGENT,
-        reqwest::header::HeaderValue::from_static(
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 \
-             (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        ),
-    );
-    // SAT portal serves an incomplete certificate chain; the browser handles it
-    // via AIA but reqwest/OpenSSL cannot resolve the missing intermediate.
-    Ok(reqwest::Client::builder()
-        .danger_accept_invalid_certs(true)
-        .default_headers(headers)
-        .build()?)
 }
 
 async fn validate_download(http_client: &reqwest::Client) -> Result<(), Box<dyn Error>> {

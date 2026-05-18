@@ -1,6 +1,6 @@
 use crate::config::{CrawlerConfig, CrawlerFilters};
 use crate::crawls;
-use crate::events::SharedInvoiceEventHandler;
+use crate::events::{SharedCsfEventHandler, SharedInvoiceEventHandler};
 use crate::logger;
 use chromiumoxide::{Browser, BrowserConfig, Handler};
 use serde::{Deserialize, Serialize};
@@ -17,6 +17,7 @@ pub enum CrawlerType {
     DownloadIssuedInvoices,
     DownloadReceivedInvoices,
     ValidateCredentials,
+    DownloadCsf,
 }
 
 pub struct Crawler {
@@ -24,6 +25,7 @@ pub struct Crawler {
     pub config: CrawlerConfig,
     pub logger: logger::Logger,
     pub event_handler: Option<SharedInvoiceEventHandler>,
+    pub csf_event_handler: Option<SharedCsfEventHandler>,
     pub filters: CrawlerFilters,
 }
 
@@ -34,12 +36,18 @@ impl Crawler {
             config: config,
             logger: logger::Logger::new(),
             event_handler: None,
+            csf_event_handler: None,
             filters: CrawlerFilters::default(),
         }
     }
 
     pub fn with_event_handler(mut self, handler: SharedInvoiceEventHandler) -> Self {
         self.event_handler = Some(handler);
+        self
+    }
+
+    pub fn with_csf_event_handler(mut self, handler: SharedCsfEventHandler) -> Self {
+        self.csf_event_handler = Some(handler);
         self
     }
 
@@ -68,6 +76,7 @@ impl Crawler {
             CrawlerType::DownloadReceivedInvoices => {
                 crawls::run_download_received_invoices_crawler(&self).await
             }
+            CrawlerType::DownloadCsf => crawls::run_download_csf_crawler(&self).await,
         };
         match response {
             Ok(response) => response,

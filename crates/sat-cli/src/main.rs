@@ -3,8 +3,8 @@ use clap::{Parser, Subcommand};
 use sat_cfdi;
 use satcrawler::{
     get_download_folder, parse_date, Crawler, CrawlerConfig, CrawlerFilters, CrawlerOptions,
-    CrawlerType, Credentials, Invoice, InvoiceEvent, InvoiceEventHandler, LoginType,
-    SharedInvoiceEventHandler,
+    CrawlerType, Credentials, CsfEvent, CsfEventHandler, Invoice, InvoiceEvent,
+    InvoiceEventHandler, LoginType, SharedCsfEventHandler, SharedInvoiceEventHandler,
 };
 use std::env;
 use std::io::{self, Write};
@@ -103,6 +103,48 @@ impl InvoiceEventHandler for CliInvoiceHandler {
             }
         }
     }
+}
+
+struct CliCsfHandler {
+    download_path: String,
+}
+
+#[async_trait]
+impl CsfEventHandler for CliCsfHandler {
+    async fn on_csf_event(&self, event: CsfEvent) {
+        match event {
+            CsfEvent::PdfDownloaded { content } => {
+                let dest = std::path::Path::new(&self.download_path).join("csf.pdf");
+                match std::fs::write(&dest, &content) {
+                    Ok(_) => println!("CSF saved to {}", dest.display()),
+                    Err(e) => eprintln!("[ERROR] Failed to save CSF: {}", e),
+                }
+            }
+            CsfEvent::PdfDownloadFailed { error } => {
+                eprintln!("[ERROR] CSF download failed: {}", error);
+            }
+        }
+    }
+}
+
+async fn run_csf_command(args: CrawlArgs) {
+    let mut config = CrawlerConfig::new_from_file();
+    apply_args_to_config(&mut config, args);
+    validate_config_or_exit(&config);
+    let download_path = get_download_folder(Some(config.credentials.username.clone()));
+    if let Err(e) = std::fs::create_dir_all(&download_path) {
+        eprintln!(
+            "[ERROR] Failed to create download directory {}: {}",
+            download_path, e
+        );
+    }
+    let handler: SharedCsfEventHandler = Arc::new(CliCsfHandler { download_path });
+    let crawler = Crawler::new(CrawlerType::DownloadCsf, config).with_csf_event_handler(handler);
+    let response = crawler.run().await;
+    println!(
+        "{}",
+        serde_json::to_string(&response).expect("Response serialization error")
+    );
 }
 
 async fn run_crawl_command(
@@ -239,6 +281,11 @@ enum CrawlCommands {
         args: CrawlArgs,
         #[command(flatten)]
         filters: DownloadFilterArgs,
+    },
+    /// Download the Constancia de Situación Fiscal (CSF) PDF from SAT.
+    DownloadCsf {
+        #[command(flatten)]
+        args: CrawlArgs,
     },
 }
 
@@ -395,6 +442,9 @@ async fn main() {
                     Some(filters.into()),
                 )
                 .await;
+            }
+            CrawlCommands::DownloadCsf { args } => {
+                run_csf_command(args).await;
             }
         },
     }

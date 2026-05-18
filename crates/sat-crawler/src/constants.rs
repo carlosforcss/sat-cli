@@ -22,3 +22,13 @@ pub const RECOVER_RI_TOKEN_URL: &str =
     "https://portalcfdi.facturaelectronica.sat.gob.mx/ConsultaEmisor.aspx/RecuperaRepresentacionImpresa";
 pub const RECOVER_RI_URL: &str =
     "https://portalcfdi.facturaelectronica.sat.gob.mx/RepresentacionImpresa.aspx";
+
+pub const CSF_LOGIN_URL: &str = "https://login.siat.sat.gob.mx/nidp/app/login";
+pub const CSF_SSO_ENTRY_URL: &str = "https://wwwmat.sat.gob.mx/app/seg/faces/pages/lanzador.jsf\
+     ?url=/operacion/53027/genera-tu-constancia-de-situacion-fiscal\
+     &tipoLogeo=c&target=principal&hostServer=https://wwwmat.sat.gob.mx";
+/// Page that contains formReimpAcuse with the download button
+pub const CSF_CERTIFICATE_URL: &str =
+    "https://rfcampc.siat.sat.gob.mx/PTSC/IdcSiat/autc/ReimpresionTramite/ConsultaTramite.jsf";
+pub const CSF_PDF_URL: &str =
+    "https://rfcampc.siat.sat.gob.mx/PTSC/IdcSiat/IdcGeneraConstancia.jsf";

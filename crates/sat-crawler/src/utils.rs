@@ -3,8 +3,10 @@ use crate::constants::{
     DEFAULT_DOCUMENTS_FOLDER, DOCUMENTS_ENV_VAR, FILTER_START_YEAR, MX_DATE_FORMAT,
 };
 use base64::{engine::general_purpose, Engine as _};
+use chromiumoxide::cdp::browser_protocol::network::Cookie;
 use chrono::Datelike;
 use dirs;
+use std::error::Error;
 use std::future::Future;
 use std::{env, fs};
 use tempfile;
@@ -111,6 +113,32 @@ pub fn apply_date_filter(
             (effective_start <= effective_end).then_some((effective_start, effective_end))
         })
         .collect()
+}
+
+pub fn build_http_client(cookies: Vec<Cookie>) -> Result<reqwest::Client, Box<dyn Error>> {
+    let cookie_header = cookies
+        .iter()
+        .map(|c| format!("{}={}", c.name, c.value))
+        .collect::<Vec<_>>()
+        .join("; ");
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert(
+        reqwest::header::COOKIE,
+        reqwest::header::HeaderValue::from_str(&cookie_header)?,
+    );
+    headers.insert(
+        reqwest::header::USER_AGENT,
+        reqwest::header::HeaderValue::from_static(
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 \
+             (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        ),
+    );
+    // SAT portal serves an incomplete certificate chain; the browser handles it
+    // via AIA but reqwest/OpenSSL cannot resolve the missing intermediate.
+    Ok(reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .default_headers(headers)
+        .build()?)
 }
 
 pub async fn retry<Fut, T, E, F>(mut f: F, max_retries: u32, mil_delay: u64) -> Result<T, E>
