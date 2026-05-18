@@ -130,7 +130,7 @@ pub struct Earnings {
     pub total_exempt: String,
 
     #[serde(rename(deserialize = "Percepcion"), default)]
-    pub items: Vec<Earning>,
+    pub earnings: Vec<Earning>,
     #[serde(rename(deserialize = "JubilacionPensionRetiro"), default)]
     pub retirement_payment: Option<RetirementPayment>,
     #[serde(rename(deserialize = "SeparacionIndemnizacion"), default)]
@@ -211,7 +211,7 @@ pub struct Deductions {
     #[serde(rename(deserialize = "@TotalImpuestosRetenidos"), default)]
     pub total_taxes_withheld: Option<String>,
     #[serde(rename(deserialize = "Deduccion"), default)]
-    pub items: Vec<Deduction>,
+    pub deductions: Vec<Deduction>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -226,10 +226,16 @@ pub struct Deduction {
     pub amount: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct OtherPayments {
     #[serde(rename(deserialize = "OtroPago"), default)]
     pub items: Vec<OtherPayment>,
+}
+
+impl Serialize for OtherPayments {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.items.serialize(s)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -265,10 +271,16 @@ pub struct BalanceCompensation {
     pub remaining_balance: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Disabilities {
     #[serde(rename(deserialize = "Incapacidad"), default)]
     pub items: Vec<Disability>,
+}
+
+impl Serialize for Disabilities {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.items.serialize(s)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

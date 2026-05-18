@@ -237,16 +237,28 @@ impl DocumentTaxes {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct TransferList {
     #[serde(rename(deserialize = "Traslado"), default)]
     pub items: Vec<Transfer>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl Serialize for TransferList {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.items.serialize(s)
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct WithholdingList {
     #[serde(rename(deserialize = "Retencion"), default)]
     pub items: Vec<Withholding>,
+}
+
+impl Serialize for WithholdingList {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.items.serialize(s)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

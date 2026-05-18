@@ -50,10 +50,16 @@ pub struct FreightTransportComplement {
     pub rail_transport: Option<RailTransportShell>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct CustomsRegimes {
     #[serde(rename(deserialize = "RegimenAduaneroCCP"), default)]
     pub items: Vec<CustomsRegime>,
+}
+
+impl Serialize for CustomsRegimes {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.items.serialize(s)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,10 +68,16 @@ pub struct CustomsRegime {
     pub regime: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Locations {
     #[serde(rename(deserialize = "Ubicacion"), default)]
     pub items: Vec<Location>,
+}
+
+impl Serialize for Locations {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.items.serialize(s)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -137,7 +149,7 @@ pub struct Goods {
     pub assessment_charge: Option<String>,
 
     #[serde(rename(deserialize = "Mercancia"), default)]
-    pub items: Vec<Merchandise>,
+    pub merchandise: Vec<Merchandise>,
     #[serde(rename(deserialize = "AutotransporteFederal"), default)]
     pub federal_road_transport: Option<FederalRoadTransport>,
 }
@@ -286,10 +298,16 @@ pub struct VehicleInsurance {
     pub insurance_premium: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Trailers {
     #[serde(rename(deserialize = "Remolque"), default)]
     pub items: Vec<Trailer>,
+}
+
+impl Serialize for Trailers {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.items.serialize(s)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -346,10 +364,16 @@ pub struct RailTransportShell {
 
 // ── Transport figures ────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct TransportFigures {
     #[serde(rename(deserialize = "TiposFigura"), default)]
     pub items: Vec<TransportFigure>,
+}
+
+impl Serialize for TransportFigures {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.items.serialize(s)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

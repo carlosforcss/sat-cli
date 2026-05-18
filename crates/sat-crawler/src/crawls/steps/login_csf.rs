@@ -99,7 +99,9 @@ async fn try_to_login_csf_with_fiel(
     page.wait_for_navigation().await?;
     do_sleep(1).await;
 
-    crawler.logger.info("CSF FIEL login: uploading certificate (.cer)");
+    crawler
+        .logger
+        .info("CSF FIEL login: uploading certificate (.cer)");
     let crt_input = page.find_element("#fileCertificate").await?;
     page.execute(
         chromiumoxide::cdp::browser_protocol::dom::SetFileInputFilesParams::builder()
@@ -109,7 +111,9 @@ async fn try_to_login_csf_with_fiel(
     )
     .await?;
 
-    crawler.logger.info("CSF FIEL login: uploading private key (.key)");
+    crawler
+        .logger
+        .info("CSF FIEL login: uploading private key (.key)");
     let key_input = page.find_element("#filePrivateKey").await?;
     page.execute(
         chromiumoxide::cdp::browser_protocol::dom::SetFileInputFilesParams::builder()
@@ -119,7 +123,9 @@ async fn try_to_login_csf_with_fiel(
     )
     .await?;
 
-    crawler.logger.info("CSF FIEL login: entering private key password");
+    crawler
+        .logger
+        .info("CSF FIEL login: entering private key password");
     let password_input = page.find_element("#privateKeyPassword").await?;
     password_input.focus().await?;
     password_input

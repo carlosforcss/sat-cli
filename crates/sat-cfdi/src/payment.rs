@@ -126,16 +126,28 @@ impl RelatedDocumentTaxes {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct RelatedDocumentWithholdingList {
     #[serde(rename(deserialize = "RetencionDR"), default)]
     pub items: Vec<RelatedDocumentWithholding>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl Serialize for RelatedDocumentWithholdingList {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.items.serialize(s)
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct RelatedDocumentTransferList {
     #[serde(rename(deserialize = "TrasladoDR"), default)]
     pub items: Vec<RelatedDocumentTransfer>,
+}
+
+impl Serialize for RelatedDocumentTransferList {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.items.serialize(s)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -189,16 +201,28 @@ impl PaymentTaxes {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct PaymentWithholdingList {
     #[serde(rename(deserialize = "RetencionP"), default)]
     pub items: Vec<PaymentWithholding>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl Serialize for PaymentWithholdingList {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.items.serialize(s)
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct PaymentTransferList {
     #[serde(rename(deserialize = "TrasladoP"), default)]
     pub items: Vec<PaymentTransfer>,
+}
+
+impl Serialize for PaymentTransferList {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.items.serialize(s)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
